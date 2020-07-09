@@ -1,0 +1,1930 @@
+---
+title: "TFD longitudinal analyses"
+author: "Amy Nematollahi and Julia Fisher"
+date: "7/5/2020"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, echo = F}
+
+knitr::opts_chunk$set(echo = F, comment = F, warning = F, error = F, message = F, dev = 'pdf', results = 'hide')
+
+```
+
+
+```{r load libraries, results = F}
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(kableExtra)
+library(lubridate)
+library(lme4)
+library(stringr)
+library(car)
+library(stargazer)
+library(xtable)
+library(car)
+library(ggpubr)
+library(jtools)
+library(broom)
+library(openxlsx)
+library(tidyr)
+library(tidyverse)
+library(labelled)
+library(tableone)
+require(GGally)
+require(reshape2)
+require(compiler)
+require(parallel)
+require(boot)
+require(lattice)
+library(rcompanion)
+library(emmeans)
+library(cowplot) #ggarrange
+library(plotly)
+library(wesanderson)
+library(emmeans)
+
+```
+
+
+```{r data prep, results = F}
+
+TFDfinal <-  read.csv("/Users/amynematollahi/desktop/TFDlong2.csv", stringsAsFactors = TRUE)
+
+firePFAS <-  read.csv("/Users/amynematollahi/desktop/firePFAS.csv", stringsAsFactors = TRUE) %>%
+  mutate(Subject_Good = as.integer(Subject_Good)) %>%
+  dplyr::select(SubjectID, Status, period, Fire_Days, Fire_Hours, Num_Fires, Inc.Cat) %>%
+  unique()
+
+#Include only recruits and recruit repeats
+TFDlong <- firePFAS %>%
+   left_join(TFDfinal, by = c("SubjectID" = "Subject_Good")) %>%
+  # dplyr::select(-X, - B2M, -GADPH, -RPL19, -ACTB, - RPLP0, -Status.y) %>%
+  rename(Status = Status.x, Age = Agegood, Ethnicity = EthnGood, Gender = GenderGood, Race = RaceGood, 
+         BMI = BMIgood) %>%
+  mutate(FireCat = ifelse(Inc.Cat == "Structure Fire", 1,
+                          ifelse(is.na(Inc.Cat), NA, 2))) %>%
+  filter(Status != 'Incumbent')
+
+
+drop <- c("X")
+TFDlong = TFDlong[,!(names(TFDlong) %in% drop)]
+
+TFDlong <- TFDlong %>%
+   dplyr::select(-smoker, -match, -Type.of.Sample, -Datebaseline, -Status, -Year_and_month_of_analysis, -TypeofSample, -period) %>%
+   rename(Status = Status.y) %>%
+  mutate(PFOSALOD = ifelse(PFOSA > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+  mutate(nPFOALOD = ifelse(nPFOA > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+   mutate(nPFOSLOD = ifelse(nPFOS > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+   mutate(PFDEALOD = ifelse(PFDEA > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+   mutate(PFHXSLOD = ifelse(PFHXS > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+   mutate(PFNALOD = ifelse(PFNA > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+   mutate(PFUALOD = ifelse(PFUA > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+   mutate(SbPFOALOD = ifelse(SbPFOA > 0.07071068, "Above_LOD", "Below_LOD")) %>%
+   mutate(SmPFOSLOD = ifelse(SmPFOS > 0.07071068, "Above_LOD", "Below_LOD"))
+
+temp_fn <- function(x) ifelse(x == "Above_LOD", 1, 0)
+temp_fac <- function(x) as.factor(x)
+                                  
+
+TFDlong <- TFDlong %>%
+  mutate_at(vars(contains("LOD")), temp_fn) %>%
+  mutate_at(vars(contains("LOD")), temp_fac) %>%
+  mutate(FireCat = factor(FireCat, levels = c("Structure Fires", "Non-structure fires"))) %>%
+  mutate(Status = factor(Status, levels = c("Recruit", "RecruitRepeat"))) %>%
+  filter(Status != 'Incumbent') %>%
+  mutate(inter.term = paste0(Ethnicity, '_', Status, '_', Gender)) %>%
+  mutate(inter.term = ifelse(inter.term == 'Non-hispanic_Recruit_Male', 'NH_R_M',
+                             ifelse(inter.term == 'Hispanic_Recruit_Male', 'H_R_M',
+                             ifelse(inter.term == 'Hispanic_Recruit_Female', 'H_R_F',
+                             ifelse(inter.term == 'Non-hispanic_RecruitRepeat_Male', 'NH_RR_M',
+                             ifelse(inter.term == 'Non-hispanic_RecruitRepeat_Female', 'NH_RR_F',
+                             ifelse(inter.term == 'Hispanic_RecruitRepeat_Male', 'H_RR_M',
+                             ifelse(inter.term == 'Hispanic_RecruitRepeat_Female', 'H_RR_F',
+                             ifelse(inter.term == 'Non-hispanic_Recruit_Female', 'NH_R_F', 'check'))))))))) %>%
+  mutate(inter.term = factor(inter.term, levels = c("H_R_M", "H_RR_M", "NH_R_M", "NH_RR_M", "H_R_F", "H_RR_F", "NH_R_F", "NH_RR_F"))) %>%
+  mutate(ethn.gen = paste0(Ethnicity, '_', Gender)) %>%
+  mutate(ethn.gen = ifelse(ethn.gen == 'Non-hispanic_Male', 'NH_M',
+                             ifelse(ethn.gen == 'Hispanic_Male', 'H_M',
+                             ifelse(ethn.gen == 'Hispanic_Female', 'H_F',
+                             ifelse(ethn.gen == 'Non-hispanic_Female', 'NH_F', 'check'))))) %>% 
+  mutate(ethn.gen = factor(ethn.gen, levels = c("NH_M", "H_M", "NH_F", "H_F"))) %>%
+  unique()
+
+                 
+              
+  
+sort(unique(TFDlong$inter.term)) #Hispanic_Incumbent_Female
+
+
+```
+
+
+```{r add in complete fire data from Alesia, results = F}
+
+
+# This script reads in the fire data from Alesia.
+# Written by Julia Fisher.
+# julia@statlab.bio5.org
+
+# Load needed libraries:
+
+# Function to go through each sheet and spit out a clean data frame:
+clean_up_data <- function(dta) {
+  
+  # Get the row numbers for which we get a subject ID.
+  sub.id.rows <- which(grepl("^\\d\\d\\d\\d$", dta[, 1]))
+  
+  for (i in 1:length(sub.id.rows)) {
+    
+    # Get the row with the subject ID.
+    id.row <- sub.id.rows[i]
+    
+    # Get the end row for this subject.
+    if (i != length(sub.id.rows)) {
+      end.id.row <- sub.id.rows[i + 1] - 1
+    } else {
+      end.id.row <- nrow(dta)
+    }
+    
+    # Get the subject data.
+    sub.dta <- dta[id.row:end.id.row, ]
+    
+    # Get the subject id.
+    sub.id <- dta[id.row, 1]
+    
+    # Get the rows where it might say the fire category.
+    possible.category.rows <- which(grepl("^[A-Za-z]", sub.dta[, 1])) 
+    
+    # Get the rows before the above rows to help us identify the fire category rows.
+    prev.rows <- possible.category.rows - 1
+    
+    # Confirm the fire category rows.
+    category.rows <- possible.category.rows[grepl("\\d{7}", sub.dta[prev.rows, 1])]
+    
+    # Go through each fire category for the given subject and process the data.
+    for (j in 1:length(category.rows)) {
+      
+      # Get the row with the fire category.
+      category.row <- category.rows[j]
+      
+      # Get the fire category.
+      cur.category <- sub.dta[category.row, 1]
+      
+      # Get the start row for this fire category chunk.
+      if (j == 1) {
+        start.row <- 1
+      } else {
+        start.row <- category.rows[j - 1] + 1
+      }
+      
+      # Get the end row for this fire category chunk.
+      end.row <- category.row - 1
+      
+      # Pull the chunk of data and process the dates, times, and durations.
+      cat.dta <- data.frame(SubjectID = rep(sub.id, end.row - (start.row - 1)),
+                            fire_category = cur.category, 
+                            incidentID = sub.dta[start.row:end.row, 1],
+                            date = sub.dta[start.row:end.row, 2],
+                            duration = sub.dta[start.row:end.row, 3],
+                            stringsAsFactors = FALSE) %>%
+        filter(grepl("\\d{7}", incidentID)) %>%
+        mutate(time_tmp = gsub("\\d{4}-\\d{2}-\\d{2}T", "", date),
+               time_secs = round(as.numeric(gsub("\\d{2}:\\d{2}:", "", time_tmp))),
+               time_hrs_mins = gsub(":\\d{2}\\.\\d*$", "", time_tmp),
+               time = paste0(time_hrs_mins, ":", as.character(time_secs)),
+               date_tmp = gsub("T.*", "", date),
+               date_time = as.POSIXct(paste(date_tmp, time), format = "%Y-%m-%d %H:%M:%S"),
+               date = as.POSIXct(date, format = "%Y-%m-%d"),
+               hrs = as.numeric(gsub(":\\d{2}:\\d{2}$", "", duration)),
+               mins = as.numeric(gsub("(^\\d{2}:)|(:\\d{2}$)", "", duration)),
+               secs = as.numeric(gsub("^\\d{2}:\\d{2}:", "", duration)),
+               duration_in_mins = hrs*60 + mins + secs/60) %>%
+        dplyr::select(SubjectID, fire_category, incidentID, date_time, date, duration, duration_in_mins)
+      
+      # Concatenate the data for this subject.
+      if (j == 1) {
+        out.sub.dta <- cat.dta
+      } else {
+        out.sub.dta <- rbind(out.sub.dta, cat.dta)
+      }
+    }
+    
+    # Concatenate the data for multiple subjects.
+    if (i == 1) {
+      out.dta <- out.sub.dta
+    } else {
+      out.dta <- rbind(out.dta, out.sub.dta)
+    }
+  }
+  
+  # Return the concatenated dataset.
+  return(out.dta)
+}
+
+
+# File path
+dta.file <- "/Users/amynematollahi/desktop/PWP_Fire Fighter Fire Exposure_RecruitFires.xlsx"
+
+# Read in the first sheet:
+dta1 <- read.xlsx(dta.file, sheet = 1, colNames = FALSE)
+dta2 <- read.xlsx(dta.file, sheet = 2, colNames = FALSE)
+dta3 <- read.xlsx(dta.file, sheet = 3, colNames = FALSE)
+dta4 <- read.xlsx(dta.file, sheet = 4, colNames = FALSE)
+
+# Run the sheets through the processing function:
+out.dta1 <- clean_up_data(dta1) 
+out.dta2 <- clean_up_data(dta2)
+out.dta3 <- clean_up_data(dta3)
+out.dta4 <- clean_up_data(dta4)
+
+# Combine the sheets:
+processed.dta <- rbind(out.dta1, out.dta2, out.dta3, out.dta4)
+
+# The data frame processed.dta is your final, good data frame!
+
+
+
+```
+
+```{r, read in three subjects missing from Alesias file}
+
+#read in subjects 2013, 2055, and 2302
+
+dta.file.missing <- "/Users/amynematollahi/downloads/FireFighterFireExposure_2302_2055_2013.xlsx"
+
+dta.missing <-  read.xlsx(dta.file.missing, sheet = 1, colNames = FALSE) 
+
+out.dta.missing <- clean_up_data(dta.missing)
+
+processed.dta2 <- rbind(out.dta.missing, processed.dta)
+
+
+
+```
+
+
+```{r data cleaning, results = F}
+
+time.spread <- TFDlong %>%
+  mutate(Status = as.character(Status)) %>%
+  mutate(date = as.character(Collection_Date)) %>%
+  dplyr::select(SubjectID, date, Status) %>%
+  unique() %>%
+  pivot_wider(names_from = Status, values_from = date) %>%
+  as.data.frame() %>%
+  mutate(Recruit = as.POSIXct(Recruit, format = "%Y-%m-%d"),
+         RecruitRepeat = as.POSIXct(RecruitRepeat, format = "%Y-%m-%d")) %>%
+  mutate(SubjectID = as.character(SubjectID)) %>%
+  left_join(processed.dta2, by = 'SubjectID') %>%
+  mutate(time.chunk = ifelse(date_time <= Recruit, 'before_time_1',
+                             ifelse(date_time > Recruit & date_time <= RecruitRepeat, 'between_time_1_and_2',
+                                    ifelse(date_time > RecruitRepeat, 'after_time_2', 'weird'))), 
+         dummy.col = 1,
+         time_between_visits = RecruitRepeat - Recruit)
+  
+  total.runs = time.spread %>%
+  group_by(SubjectID, time.chunk) %>%
+  summarise(total.duration = sum(duration_in_mins), 
+            total.num.fireruns = sum(dummy.col)) %>%
+  ungroup %>%
+  as.data.frame %>%
+  filter(time.chunk != 'after_time_2') 
+  
+  str_runs = time.spread %>%
+  group_by(SubjectID, time.chunk, fire_category) %>%
+  summarise(str.duration = sum(duration_in_mins), 
+            str.num.fireruns = sum(dummy.col)) %>%
+  ungroup %>%
+  as.data.frame %>%
+  filter(time.chunk != 'after_time_2') %>%
+    filter(fire_category ==  "Structure Fire (Inside Building)") 
+  
+  MRF <- time.spread %>%
+    mutate(time.to.time2 = difftime(RecruitRepeat, date, units = 'days')) %>%
+    dplyr::select(SubjectID, RecruitRepeat, date, time.to.time2) %>%
+    filter(time.to.time2 > 0) %>%
+    group_by(SubjectID) %>%
+    arrange(time.to.time2) %>%
+    mutate(row_num = 1:n()) %>%
+    filter(row_num == 1) %>%
+    ungroup %>%
+    as.data.frame
+  
+  strcMRF <- time.spread %>%
+    filter(fire_category == "Structure Fire (Inside Building)") %>%
+    mutate(time.to.time2 = difftime(RecruitRepeat, date, units = 'days')) %>%
+    dplyr::select(SubjectID, RecruitRepeat, date, time.to.time2) %>%
+    filter(time.to.time2 > 0) %>%
+    group_by(SubjectID) %>%
+    arrange(time.to.time2) %>%
+    mutate(row_num = 1:n()) %>%
+    filter(row_num == 1) %>%
+    ungroup %>%
+    as.data.frame %>%
+    dplyr::select(-row_num)
+  
+  #join up to TFDtuk
+  #contact Alesia and Muath about missing fire data
+  #Time since most recent fire, how to model this and represent Time 1
+  #Time between blood draws, number of fires, number of structural fires, duration of fires, duration of structural fires
+  #
+  
+
+
+```
+
+
+```{r, tukey transform PFAS values, results = 'hide', fig.show = 'hide'}
+
+
+TFDtuk <- TFDlong %>%
+  unique() %>%
+  mutate(PFOSAorig = PFOSA,
+         nPFOAorig = nPFOA,
+         nPFOSorig = nPFOS,
+         PFDEAorig = PFDEA,
+         PFHXSorig = PFHXS,
+         PFNAorig = PFNA,
+         PFUAorig = PFUA,
+         SbPFOAorig = SbPFOA,
+         SmPFOSorig = SmPFOS) %>%
+  mutate(PFOSA = transformTukey(PFOSA)) %>% #lambda = -1.55
+  mutate(nPFOA = transformTukey(nPFOA)) %>% #lambda = -0.4
+  mutate(nPFOS = transformTukey(nPFOS)) %>% #lambda = -0.675
+  mutate(PFDEA = transformTukey(PFDEA)) %>% #lambda = -0.3
+  mutate(PFHXS = transformTukey(PFHXS)) %>% #lambda = -0.15
+  mutate(PFNA = transformTukey(PFNA)) %>% #lambda = -0.325
+  mutate(PFUA = transformTukey(PFUA)) %>% #lambda = -1.325
+  mutate(SbPFOA = transformTukey(SbPFOA)) %>% #lambda = -1.95
+  mutate(SmPFOS = transformTukey(SmPFOS)) %>% #lambda = -0.5
+  mutate(SubjectID = as.factor(SubjectID)) 
+
+
+# PFOSA.lambda <- -1.55
+# nPFOA.lambda <- -0.4
+# nPFOS.lambda <- -0.675
+# PFDEA.lambda <- -0.3
+# PFHXS.lambda <- -0.15
+# PFNA.lambda <- -0.325
+# PFUA.lambda <- -1.325
+# SbPFOA.lambda <- -1.95
+# SmPFOS.lambda <- -0.5
+  
+#   if (lambda >  0){TRANS = x ^ lambda}
+# if (lambda == 0){TRANS = log(x)} 
+# if (lambda <  0){TRANS = -1 * x ^ lambda} 
+
+#TFDtuk[which(TFDtuk$inter.term == "NH_R_F"), ]
+```
+
+
+```{r plot for all three factors, echo = F}
+
+
+getOption('xtable.comment',TRUE)
+options(xtable.comment = FALSE)
+
+lod.table4 <- print(CreateTableOne(vars = c('inter.term', 'PFOSALOD', 'nPFOALOD', "nPFOSLOD",
+                                            "PFDEALOD", "PFHXSLOD", "PFNALOD",
+                                            "PFUALOD", "SbPFOALOD", "SmPFOSLOD"),
+                                   data = TFDtuk,
+                                   includeNA = TRUE, 
+                                   factorVars = c('inter.term', 'PFOSALOD', 'nPFOALOD', "nPFOSLOD",
+                                            "PFDEALOD", "PFHXSLOD", "PFNALOD",
+                                            "PFUALOD", "SbPFOALOD", "SmPFOSLOD"),
+                                   strata = 'inter.term',
+                                   test = F),
+                    varLabels = T,
+                    showAllLevels = T)
+lod.table2 <-  cbind(`Variable` = attr(lod.table4, "dimnames")[[1]], as.data.frame(lod.table4)) 
+lod.string <- print(xtable(lod.table2, 
+                           caption = paste0("PFAS chemicals LOD by factors. ",
+                                            "Counts (\\%) for each category are given.")),
+                          # align = c("r", ">{\\RaggedLeft}p{2.25in}", "c", "c", "c", "c", "c"),
+                          # label = "tab:tab_lod"), 
+                    sanitize.text.function = function(x){
+                      x2 <- gsub("_", "\\\\_", x)
+                      x3 <- gsub("%", "\\\\%", x2)
+                      x4 <- gsub("\\n", "", x3)
+                      return(x4)
+                    },
+                    include.rownames = F,
+                    booktabs = T,
+                    size = "footnotesize")
+lod.string.final4 <- gsub(" \\\\\\\\ ", " \\\\tabularnewline ", lod.string)
+
+
+
+```
+
+\newpage
+\begin{landscape}
+
+```{r, results = 'asis'}
+
+cat(noquote(lod.string.final4))
+
+```
+
+\end{landscape}
+
+Should I remove subject 2009 (missing fire info) from FireTuk?
+
+```{r join TFDtuk to fire exposure data, results = F}
+
+FireTuk <- TFDtuk %>%
+  left_join(time.spread %>% 
+              dplyr::select(SubjectID, time_between_visits) %>%
+              unique() %>%
+              rename(time.since.baseline = time_between_visits),
+               by = 'SubjectID') %>%
+  left_join(MRF %>%
+              dplyr::select(SubjectID, time.to.time2) %>%
+              rename(days.since.MRF = time.to.time2), by = 'SubjectID') %>%
+  left_join(str_runs %>%
+              dplyr::select(SubjectID, str.duration, str.num.fireruns),
+            by = 'SubjectID') %>%
+  left_join(strcMRF %>%
+              dplyr::select(SubjectID, time.to.time2) %>%
+              rename(days.since.struc.MRF = time.to.time2), by = 'SubjectID') %>%
+  left_join(total.runs %>%
+              dplyr::select(SubjectID, total.duration, total.num.fireruns), by = 'SubjectID') %>%
+  mutate(time.since.baseline = ifelse(Status == 'Recruit', 0, time.since.baseline),
+         str.duration = ifelse(Status == 'Recruit', 0, str.duration),
+         str.num.fireruns = ifelse(Status == 'Recruit', 0, str.num.fireruns),
+         days.since.struc.MRF = ifelse(Status == 'Recruit', NA, days.since.struc.MRF),
+         days.since.MRF = ifelse(Status == 'Recruit', NA, days.since.MRF),
+         total.duration = ifelse(Status == 'Recruit', 0, total.duration),
+         total.num.fireruns = ifelse(Status == 'Recruit', 0, total.num.fireruns)) %>%
+  dplyr::select(-Fire_Days, -Fire_Hours, -Num_Fires, -Inc.Cat, -FF_Dur, -FireCat) %>% #remove old fire info
+  unique()
+
+
+```
+
+For the densities, include a color grouping for time (1 or 2).
+For the scatterplots, include lines between data points from the same person (to get a better understanding of slope).  This corresponds to a grouping for each participant ID.  We could include an additional grouping for ethnicity by gender if we want or a facet for ethnicity by gender.
+
+
+```{r Table 1, results = 'asis'}
+
+#Put PFAS in separate table
+
+# TFDlong2 <- TFDlong %>%
+#   dplyr::select(-Collection_Date) %>%
+#   unique()
+
+
+var_label(FireTuk) <- list(Status = "Firefighter Status", Gender = 'Gender',
+                            Ethnicity = 'Ethnicity', 
+                            days.since.MRF = 'Days Since Most Recent Fire',
+                           str.duration = 'Structural Fires (Cumalitive Duration in minutes)',
+                           str.num.fireruns = 'Cumulative Number of Structural Fires',
+                           days.since.struc.MRF = 'Days Since Most Recent Structural Fire',
+                           total.duration = 'All fires (Cumalitive Duration in minutes)',
+                           total.num.fireruns = 'Cumulative Number of Fires')
+
+# biomarkers <-  c("PFOSA", "nPFOA", "nPFOS", "PFDEA", "PFHXS", "PFNA", "PFUA", "SbPFOA", "SmPFOS")
+# var_label(biomarkers) <-  '(ng/mL)'
+
+ tableOne <- CreateTableOne(vars = c('Status', 'Gender', 'Ethnicity',
+                                     'yearsFF', "days.since.MRF", "days.since.struc.MRF", 
+                                     "total.num.fireruns", "str.num.fireruns", "total.duration",
+                                     "str.duration"), 
+                             data=FireTuk, strata = 'Status', 
+                             factorVars =  c('Gender', 'Ethnicity'), includeNA = TRUE)
+
+
+kableTable <- print(tableOne, showAllLevels = TRUE, varLabels = TRUE, includeNA = TRUE,
+                    test = F)
+
+
+printTable <- kable(kableTable, caption = 'Table 1: Recruit firefighters baseline (Recruit) and follow-up (RecruitRepeat) characteristics') %>%
+kable_styling(bootstrap_options = c("hover", 'striped'), font_size = 14) 
+
+printTable
+ 
+save_kable(printTable, file = 'allTFDtable1.pdf')
+
+
+```
+
+```{r PFAS table, results = 'asis'}
+
+var_label(TFDlong) <- list(Status = "Firefighter Status")
+
+biomarkers <-  c("PFOSA", "nPFOA", "nPFOS", "PFDEA", "PFHXS", "PFNA", "PFUA", "SbPFOA", "SmPFOS")
+var_label(biomarkers) <-  '(ng/mL)'
+
+ tableOne <- CreateTableOne(vars = c("PFOSA", "nPFOA", "nPFOS", "PFDEA", "PFHXS",
+                                     "PFNA", "PFUA",
+                                     "SbPFOA", "SmPFOS"), 
+                             data=TFDlong, strata = 'Status', test = FALSE)
+
+
+kableTable <- print(tableOne, showAllLevels = FALSE, nonnormal = biomarkers, varLabels = TRUE, includeNA = TRUE)
+
+
+printTable <- kable(kableTable, caption = 'Table 2: Recruit firefighters PFAS serum levels') %>%
+kable_styling(bootstrap_options = c("hover", 'striped'), font_size = 12) 
+
+printTable
+
+
+
+```
+
+```{r plot PFAS/fire type}
+
+#Fire type
+# Create two label vectors to allow easier labeling in the plots:
+pfas_analyte_labels = c("PFOSA", 
+                        "n-PFOA", 
+                        "n-PFOS", 
+                        "PFDeA", 
+                        "PFHxS", 
+                        "PFNA", 
+                        "PFUA", 
+                        "Sb-PFOA",
+                        "Sm-PFOS")
+names(pfas_analyte_labels) <- c("PFOSAorig",
+                               "nPFOAorig",
+                               "nPFOSorig",
+                               "PFDEAorig",
+                               "PFHXSorig",
+                               "PFNAorig",
+                               "PFUAorig",
+                               "SbPFOAorig",
+                               "SmPFOSorig")
+
+df <- melt(FireTuk, id.vars = "Status", measure.vars = c('PFOSAorig', 'nPFOAorig', 'nPFOSorig', 'PFDEAorig',
+                                                         'PFHXSorig', 'PFNAorig', 'PFUAorig', 'SbPFOAorig',
+                                                         'SmPFOSorig'))
+
+ggplot(df, aes(x = Status, y = log(value), fill = Status)) +
+  geom_boxplot(position = position_dodge(), na.rm = TRUE) +
+  facet_grid(. ~ variable,
+             labeller = labeller(variable = pfas_analyte_labels)) +
+  guides(fill = FALSE) +
+  labs(x = "Study Period",
+       y = "log(Lab Value)",
+       title = "PFAS Analyte Values for Recruits at Baseline and Follow-up") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_discrete(labels = c("Baseline", "Follow-up"), name="Study Period")
+
+
+```
+
+```{r ggplots with time, results = "asis", dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300}
+
+ggplot(FireTuk, aes(x = total.duration, fill = Status)) +
+  geom_rug() +
+  geom_histogram() +
+   labs(x = "Fireruns Duration (min)", y = "Participant Count", 
+               title = "Total Duration of Fireruns at Baseline and Follow-up") +
+  theme_bw() +
+  scale_fill_discrete(name = "Period", labels = c("Baseline", "Follow-up")) +
+  scale_fill_manual(values = wes_palette(n = 2, name = "Zissou1")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(FireTuk, aes(x = str.duration, fill = Status)) +
+  geom_rug() +
+  geom_histogram() +
+  theme_bw() +
+  labs(x = "Structural Fireruns Duration (min)", y = "Participant Count", 
+               title = "Duration of Structural Fireruns at Baseline and Follow-up") +
+  scale_fill_discrete(name = "Period", labels = c("Baseline", "Follow-up")) +
+  scale_fill_manual(values = wes_palette(n = 2, name = "Zissou1")) +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+ggplot(FireTuk, aes(x = total.num.fireruns, fill = Status)) +
+  geom_rug() +
+  geom_histogram() +
+  theme_bw() +
+  labs(x = "Number of Fireruns", y = "Participant Count", 
+               title = "Total Fireruns at Baseline and Follow-up") +
+  scale_fill_discrete(name = "Period", labels = c("Baseline", "Follow-up")) +
+  scale_fill_manual(values = wes_palette(n = 2, name = "Zissou1")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(FireTuk, aes(x = str.num.fireruns, fill = Status)) +
+  geom_rug() +
+  geom_histogram() +
+  theme_bw() +
+  labs(x = "Number of Structural Fireruns", y = "Participant Count", 
+               title = "Total Structural Fireruns at Baseline and Follow-up") +
+  scale_fill_discrete(name = "Period", labels = c("Baseline", "Follow-up")) +
+  scale_fill_manual(values = wes_palette(n = 2, name = "Zissou1")) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(subset(FireTuk, Status %in% c("RecruitRepeat")), 
+        aes(x = days.since.MRF, fill = Status)) +
+  geom_rug() +
+  geom_histogram() +
+  theme_bw() +
+   labs(x = "Days Since Most Recent Firerun", y = "Participant Count", 
+               title = "Days Since Baseline of Most Recent Firerun") +
+  scale_fill_discrete(name = "Period", labels = c("Follow-up")) +
+  scale_fill_manual(values = wes_palette(n = 2, name = "Zissou1")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = "none")
+
+ggplot(subset(FireTuk, Status %in% c("RecruitRepeat")), 
+       aes(x = days.since.struc.MRF, fill = Status)) +
+  geom_rug() +
+  geom_histogram() +
+  theme_bw() +
+  labs(x = "Days Since Most Recent Structural Firerun", y = "Participant Count", 
+               title = "Days Since Baseline of Most Recent Structural Firerun") +
+  scale_fill_discrete(name = "Period", labels = c("Follow-up")) +
+  scale_fill_manual(values = wes_palette(n = 2, name = "Zissou1")) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(legend.position = "none")
+
+
+  
+```
+
+
+```{r exposure scatterplots, results = "asis", dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+knitr::knit_hooks$set(optipng = knitr::hook_optipng)
+
+plot1 <- ggplot(FireTuk, aes(x = time.since.baseline, y = PFOSAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "PFOSA concentration (ng/mL)", 
+               title = "PFOSA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+        
+
+plot2 <- ggplot(FireTuk, aes(x = time.since.baseline, y = nPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "nPFOA concentration (ng/mL)", 
+               title = "nPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot3 <- ggplot(FireTuk, aes(x = time.since.baseline, y = nPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "nPFOS concentration (ng/mL)", 
+               title = "nPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+ 
+plot4 <- ggplot(FireTuk, aes(x = time.since.baseline, y = PFDEAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "PFDeA concentration (ng/mL)", 
+               title = "PFDeA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot5 <- ggplot(FireTuk, aes(x = time.since.baseline, y = PFHXSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "PFHxS concentration (ng/mL)", 
+               title = "PFHxS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot6 <- ggplot(FireTuk, aes(x = time.since.baseline, y = PFNAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "PFNA concentration (ng/mL)", 
+               title = "PFNA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot7 <- ggplot(FireTuk, aes(x = time.since.baseline, y = PFUAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "PFUA concentration (ng/mL)", 
+               title = "PFUA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot8 <- ggplot(FireTuk, aes(x = time.since.baseline, y = SbPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "SbPFOA concentration (ng/mL)", 
+               title = "SbPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot9 <- ggplot(FireTuk, aes(x = time.since.baseline, y = SmPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Time Since Baseline (Days)", y = "SmPFOS concentration (ng/mL)", 
+               title = "SmPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plotlist <- list(plot1, plot2, plot3, plot4, plot5, plot6, plot7, plot8, plot9)
+
+
+ggarrange(plotlist = plotlist, ncol = 3, nrow = 3)
+
+plot1a <- ggplot(FireTuk, aes(x = str.duration, y = PFOSAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "PFOSA concentration (ng/mL)", 
+               title = "Structural Fires by PFOSA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot2a <- ggplot(FireTuk, aes(x = str.duration, y = nPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "nPFOA concentration (ng/mL)", 
+               title = "Structural Fires by nPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot3a <- ggplot(FireTuk, aes(x = str.duration, y = nPFOSorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "nPFOS concentration (ng/mL)", 
+               title = "Structural Fires by nPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot4a <- ggplot(FireTuk, aes(x = str.duration, y = PFDEAorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "PFDeA concentration (ng/mL)", 
+               title = "Structural Fires by PFDeA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot5a <- ggplot(FireTuk, aes(x = str.duration, y = PFHXSorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "PFHxS concentration (ng/mL)", 
+               title = "Structural Fires by PFHxS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot6a <- ggplot(FireTuk, aes(x = str.duration, y = PFNAorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "PFNA concentration (ng/mL)", 
+               title = "Structural Fires by PFNA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot7a <- ggplot(FireTuk, aes(x = str.duration, y = PFUAorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "PFUA concentration (ng/mL)", 
+               title = "Structural Fires by PFUA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot8a <- ggplot(FireTuk, aes(x = str.duration, y = SbPFOAorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "SbPFOA concentration (ng/mL)", 
+               title = "Structural Fires by SbPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot9a <- ggplot(FireTuk, aes(x = str.duration, y = SmPFOSorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Structural Fireruns Duration (min)", y = "SmPFOS concentration (ng/mL)", 
+               title = "Structural Fires by SmPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plotlista <- list(plot1a, plot2a, plot3a, plot4a, plot5a, plot6a, plot7a, plot8a, plot9a)
+
+ggarrange(plotlist = plotlista, ncol = 3, nrow = 3)
+
+
+plot1b <- ggplot(FireTuk, aes(x = total.duration, y = PFOSAorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "PFOSA concentration (ng/mL)", 
+               title = "All Fires by PFOSA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot2b <- ggplot(FireTuk, aes(x = total.duration, y = nPFOAorig, color = SubjectID)) +
+           geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "PFOSA concentration (ng/mL)", 
+               title = "All Fires by PFOSA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot3b <- ggplot(FireTuk, aes(x = total.duration, y = nPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "nPFOS concentration (ng/mL)", 
+               title = "All Fires by nPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot4b <- ggplot(FireTuk, aes(x = total.duration, y = PFDEAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "PFDeA concentration (ng/mL)", 
+               title = "All Fires by PFDeA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot5b <- ggplot(FireTuk, aes(x = total.duration, y = PFHXSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "PFHxS concentration (ng/mL)", 
+               title = "All Fires by PFHxS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot6b <- ggplot(FireTuk, aes(x = total.duration, y = PFNAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "PFNA concentration (ng/mL)", 
+               title = "All Fires by PFNA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot7b <- ggplot(FireTuk, aes(x = total.duration, y = PFUAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "PFUA concentration (ng/mL)", 
+               title = "All Fires by PFUA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot8b <- ggplot(FireTuk, aes(x = total.duration, y = SbPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "SbPFOA concentration (ng/mL)", 
+               title = "All Fires by SbPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot9b <- ggplot(FireTuk, aes(x = total.duration, y = SmPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "All Fireruns Duration (min)", y = "SmPFOS concentration (ng/mL)", 
+               title = "All Fires by SmPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plotlistb <- list(plot1b, plot2b, plot3b, plot4b, plot5b, plot6b, plot7b, plot8b, plot9b)
+
+ggarrange(plotlist = plotlistb, ncol = 3, nrow = 3)
+
+
+plot1c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = PFOSAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "PFOSA concentration (ng/mL)", 
+               title = "Number of Structural Fires by PFOSA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot2c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = nPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "nPFOA concentration (ng/mL)", 
+               title = "Number of Structural Fires by nPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot3c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = nPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "nPFOS concentration (ng/mL)", 
+               title = "Number of Structural Fires by nPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot4c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = PFDEAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "PFDeA concentration (ng/mL)", 
+               title = "Number of Structural Fires by PFDeA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot5c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = PFHXSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "PFHxS concentration (ng/mL)", 
+               title = "Number of Structural Fires by PFHxS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot6c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = PFNAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "PFNA concentration (ng/mL)", 
+               title = "Number of Structural Fires by PFNA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot7c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = PFUAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "PFUA concentration (ng/mL)", 
+               title = "Number of Structural Fires by PFUA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot8c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = SbPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "SbPFOA concentration (ng/mL)", 
+               title = "Number of Structural Fires by SbPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot9c <- ggplot(FireTuk, aes(x = str.num.fireruns, y = SmPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Structural Fireruns", y = "SmPFOS concentration (ng/mL)", 
+               title = "Number of Structural Fires by SmPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plotlistc <- list(plot1c, plot2c, plot3c, plot4c, plot5c, plot6c, plot7c, plot8c, plot9c)
+
+ggarrange(plotlist = plotlistc, ncol = 3, nrow = 3)
+
+
+plot1d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = PFOSAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "PFOSA concentration (ng/mL)", 
+               title = "Number of Total Fires by PFOSA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot2d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = nPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "nPFOA concentration (ng/mL)", 
+               title = "Number of Total Fires by nPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot3d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = nPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "nPFOS concentration (ng/mL)", 
+               title = "Number of Total Fires by nPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot4d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = PFDEAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "PFDeA concentration (ng/mL)", 
+               title = "Number of Total Fires by PFDeA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot5d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = PFHXSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "PFHxS concentration (ng/mL)", 
+               title = "Number of Total Fires by PFHxS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot6d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = PFNAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "PFNA concentration (ng/mL)", 
+               title = "Number of Total Fires by PFNA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot7d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = PFUAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "PFUA concentration (ng/mL)", 
+               title = "Number of Total Fires by PFUA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot8d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = SbPFOAorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "SbPFOA concentration (ng/mL)", 
+               title = "Number of Total Fires by SbPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot9d <- ggplot(FireTuk, aes(x = total.num.fireruns, y = SmPFOSorig, color = SubjectID)) +
+          geom_line(alpha = 0.5) +        
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Number of Total Fires", y = "SmPFOS concentration (ng/mL)", 
+               title = "Number of Total Fires by SmPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plotlistd <- list(plot1d, plot2d, plot3d, plot4d, plot5d, plot6d, plot7d, plot8d, plot9d)
+
+ggarrange(plotlist = plotlistd, ncol = 3, nrow = 3)
+
+
+
+plot1e <- ggplot(FireTuk, aes(x = days.since.MRF, y = PFOSAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "PFOSA concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by PFOSA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot2e <- ggplot(FireTuk, aes(x = days.since.MRF, y = nPFOAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.3) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "nPFOA concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by nPFOA Level Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot3e <- ggplot(FireTuk, aes(x = days.since.MRF, y = nPFOSorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "nPFOS concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by nPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot4e <- ggplot(FireTuk, aes(x = days.since.MRF, y = PFDEAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "PFDeA concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by PFDeA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot5e <- ggplot(FireTuk, aes(x = days.since.MRF, y = PFHXSorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "PFHxS concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by PFHxS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot6e <- ggplot(FireTuk, aes(x = days.since.MRF, y = PFNAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "PFNA concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by PFNA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot7e <- ggplot(FireTuk, aes(x = days.since.MRF, y = PFUAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "PFUA concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by PFUA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot8e <- ggplot(FireTuk, aes(x = days.since.MRF, y = SbPFOAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "SbPFOA concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by SbPFOA Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot9e <- ggplot(FireTuk, aes(x = days.since.MRF, y = SmPFOSorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Fire", y = "SmPFOS concentration (ng/mL)", 
+               title = "Days Since Most Recent Fire by SmPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plotliste <- list(plot1e, plot2e, plot3e, plot4e, plot5e, plot6e, plot7e, plot8e, plot9e)
+
+ggarrange(plotlist = plotliste, ncol = 3, nrow = 3) 
+
+plot1f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = PFOSAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "PFOSA concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by PFOSA Levels") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+
+plot2f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = nPFOAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.3) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "nPFOA concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by nPFOA Level") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot3f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = nPFOSorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "nPFOS concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by nPFOS Levels") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot4f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = PFDEAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "PFDeA concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by PFDeA Levels") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot5f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = PFHXSorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "PFHxS concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by PFHxS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot6f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = PFNAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "PFNA concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by PFNA Levels") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot7f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = PFUAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "PFUA concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by PFUA Levels") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot8f <- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = SbPFOAorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Structural Recent Fire", y = "SbPFOA concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by SbPFOA Levels") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plot9f<- ggplot(FireTuk, aes(x = days.since.struc.MRF, y = SmPFOSorig, color = SubjectID)) +
+          # geom_text(aes(label = SubjectID)) +
+          # geom_line(alpha = 0.5) +
+          geom_point() +
+          guides(color = FALSE) +
+          labs(x = "Days Since Most Recent Structural Fire", y = "SmPFOS concentration (ng/mL)", 
+               title = "Days Since Most Recent Structural Fire by SmPFOS Levels Over Time") +
+          theme(plot.title = element_text(hjust = 0.5))
+
+plotliste <- list(plot1f, plot2f, plot3f, plot4f, plot5f, plot6f, plot7f, plot8f, plot9f)
+
+ggarrange(plotlist = plotliste, ncol = 3, nrow = 3) 
+
+
+```
+
+```{r nPFOA plots}
+
+ggplot(FireTuk, aes(x=days.since.struc.MRF)) + 
+  geom_line(aes(y = SmPFOSorig), color = "darkred") + 
+  geom_line(aes(y = nPFOAorig), color="steelblue", linetype="twodash") 
+
+df <- FireTuk %>%
+  select(days.since.MRF, nPFOAorig, SmPFOSorig) %>%
+  gather(key = "variable", value = "value", -days.since.MRF)
+head(df)
+
+ggplot(df, aes(x = days.since.MRF, y = value)) + 
+  geom_line(aes(color = variable, linetype = variable)) 
+
+#PFOSAorig, nPFOAorig, nPFOSorig, nPFOSorig, PFDEAorig, PFHXSorig, PFNAorig, PFUAorig, SbPFOAorig, SmPFOSorig
+
+```
+
+
+```{r models, results = F, echo = F, eval = F}
+
+
+#Logistical models were used for PFOSA, PFUA, and SbPFOA; all other models are continuous
+
+#remove women from logistical models
+
+#for continuous models do follow-up contrasts for women, avg across ethnicities (just for women)
+
+#follow-up continuous models for logistical ...given that the analyte is observable, is there a difference
+#same models as continuous, but only looking at observable LODs. What's probability of being observable? Given that you were
+#observable, what's the difference in PFAS analyte. If PFAS levels are observable, then can anti-transform.
+
+
+#PFOSA logistical model
+pfosa.long.log <- glmer(PFOSALOD ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk %>% filter(Gender == 'Male'), family = binomial)
+summary(pfosa.long.log)
+
+#continuous model follow-up on logistical model for PFOSA (transformed values)
+pfosa.long.cont <- lmer(PFOSA ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk %>% filter(Gender == 'Male', PFOSALOD == 1))
+summary(pfosa.long.cont)
+plot(resid(pfosa.long.cont) ~ fitted(pfosa.long.cont)) 
+abline(h = 0)
+
+#continuous model follow-up on logistical model for PFOSA (original values)
+pfosa.cont.orig <- lmer(PFOSAorig ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk %>% filter(Gender == 'Male', PFOSALOD == 1))
+summary(pfosa.cont.orig)
+plot(resid(pfosa.cont.orig) ~ fitted(pfosa.cont.orig)) 
+abline(h = 0)
+
+
+
+#Continuous nPFOA model with transformed values + residuals
+npfoa.long <- lmer(nPFOA ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(npfoa.long)
+plot(resid(npfoa.long) ~ fitted(npfoa.long)) 
+abline(h = 0)
+
+#Continuous nPFOA model with original values + residuals
+npfoa.long.orig <-- lmer(nPFOAorig ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(npfoa.long.orig)
+plot(resid(npfoa.long.orig) ~ fitted(npfoa.long.orig)) 
+abline(h = 0)
+
+
+
+#Continuous nPFOS model with transformed values + residuals
+npfos.long <- lmer(nPFOS ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(npfos.long)
+plot(resid(npfos.long) ~ fitted(npfos.long)) 
+abline(h = 0)
+
+#Continuous nPFOS model with original values + residuals
+npfos.long.orig <- lmer(nPFOSorig ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(npfos.long.orig)
+plot(resid(npfos.long.orig) ~ fitted(npfos.long.orig)) 
+abline(h = 0)
+
+
+
+#Continuous PFDeA model with transformed values + residuals
+pfdea.long <- lmer(PFDEA ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(pfdea.long)
+plot(resid(pfdea.long) ~ fitted(pfdea.long)) 
+abline(h = 0)
+
+#Continuous PFDea model with original values + residuals
+pfdea.long.orig <- lmer(PFDEAorig ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(pfdea.long.orig)
+plot(resid(pfdea.long.orig) ~ fitted(pfdea.long.orig)) 
+abline(h = 0)
+
+
+
+#Continuous PFHxS model with transformed values + residuals
+pfhxs.long <- lmer(PFHXS ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(pfhxs.long)
+plot(resid(pfhxs.long) ~ fitted(pfhxs.long)) 
+abline(h = 0)
+
+#Continuous PFHxS model with original values + residuals
+pfhxs.long.orig <- lmer(PFHXSorig ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(pfhxs.long.orig)
+plot(resid(pfhxs.long.orig) ~ fitted(pfhxs.long.orig)) 
+abline(h = 0)
+
+
+
+
+#PFUA logistical model
+pfua.long.log <- glmer(PFUALOD ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk %>% filter(Gender == 'Male'), family = binomial)
+summary(pfua.long.log)
+
+#continuous model follow-up on logistical model for PFUA with transformed values
+pfua.long.cont <- lmer(PFUA ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk %>% filter(Gender == 'Male', PFUALOD == 1))
+summary(pfua.long.cont)
+plot(resid(pfua.long.cont) ~ fitted(pfua.long.cont)) 
+abline(h = 0)
+
+#continuous model follow-up on logistical model for PFUA with original values
+pfua.cont.orig <- lmer(PFUAorig ~ inter.term + Age + BMI + (1|SubjectID), 
+                       data = TFDtuk %>% filter(Gender == 'Male', PFUALOD == 1))
+summary(pfua.cont.orig)
+plot(resid(pfua.cont.orig) ~ fitted(pfua.cont.orig)) 
+abline(h = 0)
+
+
+
+
+#SbPFOA logistical model
+sbpfoa.long.log <- glmer(SbPFOALOD ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk %>% filter(Gender == 'Male'), family = binomial)
+summary(sbpfoa.long.log)
+
+#continuous model follow-up on logistical model for SbPFOA
+sbpfoa.long.cont <- lmer(SbPFOA ~ inter.term + Age + BMI + (1|SubjectID), 
+                         data = TFDtuk %>% filter(Gender == 'Male', SbPFOALOD == 1))
+summary(sbpfoa.long.cont)
+plot(resid(sbpfoa.long.cont) ~ fitted(sbpfoa.long.cont)) 
+abline(h = 0)
+
+#SbPFOA continuous model follow-up on logistical model for SbPFOA using original values
+sbpfoa.cont.orig <- lmer(SbPFOAorig ~ inter.term + Age + BMI + (1|SubjectID), 
+                       data = TFDtuk %>% filter(Gender == 'Male', SbPFOALOD == 1))
+summary(sbpfoa.cont.orig)
+plot(resid(sbpfoa.cont.orig) ~ fitted(sbpfoa.cont.orig)) 
+abline(h = 0)
+
+
+
+
+#Continuous SmPFOS model with transformed values + residuals
+smpfos.long <- lmer(SmPFOS ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(smpfos.long)
+plot(resid(smpfos.long) ~ fitted(smpfos.long)) 
+abline(h = 0)
+
+#Continuous SmPFOS model with original values + residuals
+smpfos.long.orig <- lmer(SmPFOSorig ~ inter.term + Age + BMI + (1|SubjectID), data = TFDtuk)
+summary(smpfos.long.orig)
+plot(resid(smpfos.long.orig) ~ fitted(smpfos.long.orig)) 
+abline(h = 0)
+
+
+```
+
+
+```{r change score models, results = 'hide', echo = F, fig.show = 'hide'}
+
+FireChange <- FireTuk %>%
+  dplyr::select(SubjectID, Status, PFOSAorig, nPFOAorig, nPFOSorig, 
+                PFDEAorig, PFHXSorig, PFNAorig, PFUAorig, SbPFOAorig, SmPFOSorig) %>%
+  pivot_longer(names_to = "StatusByPFAS", values_to = "PFASvalue", cols = 3:11) %>%
+  pivot_wider(names_from = 'Status', values_from = 'PFASvalue') %>%
+  mutate(value_dif = RecruitRepeat - Recruit) %>%
+  as.data.frame() %>%
+  dplyr::select(-Recruit, -RecruitRepeat) %>%
+  pivot_wider(names_from = "StatusByPFAS", values_from = "value_dif") %>%
+  as.data.frame() %>%
+  left_join(FireTuk %>% 
+              filter(Status == 'RecruitRepeat') %>%
+              dplyr::select(SubjectID, Status, Ethnicity, Gender, Age, BMI, time.since.baseline, days.since.MRF, str.duration,
+                            str.num.fireruns, days.since.struc.MRF, total.duration, total.num.fireruns, inter.term, ethn.gen), by = 'SubjectID') %>%
+  mutate(Ethnicity = factor(as.character(Ethnicity), levels = c('Non-hispanic', 'Hispanic'))) %>%
+  
+  #  mutate(PFOSAtrans = PFOSAorig + abs(min(.$PFOSAorig)) + 1, 
+  #         PFOSAtrans = transformTukey(PFOSAtrans)) %>% 
+  # mutate(nPFOAtrans = nPFOAorig + abs(min(.$nPFOAorig)) + 1,
+  #        nPFOAtrans = transformTukey(nPFOAtrans)) %>% 
+  # mutate(nPFOStrans = nPFOSorig + abs(min(.$nPFOSorig)) + 1,
+  #        nPFOStrans = transformTukey(nPFOStrans)) %>% 
+  # mutate(PFDEAtrans = PFDEAorig + abs(min(.$PFDEAorig)) + 1,
+  #        PFDEAtrans = transformTukey(PFDEAtrans)) %>% 
+  # mutate(PFHXStrans = PFHXSorig + abs(min(.$PFHXSorig)) + 1,
+  #        PFHXStrans = transformTukey(PFHXStrans)) %>%  #transformation results in lambda of 1
+  # mutate(PFNAtrans = PFNAorig + abs(min(.$PFNAorig)) + 1, 
+  #        PFNAtrans = transformTukey(PFNAtrans)) %>%
+   mutate(PFOSAtrans = PFOSAorig  + 11, 
+          PFOSAtrans = transformTukey(PFOSAtrans)) %>% 
+  mutate(nPFOAtrans = nPFOAorig + 11,
+         nPFOAtrans = transformTukey(nPFOAtrans)) %>% 
+  mutate(nPFOStrans = nPFOSorig + 11,
+         nPFOStrans = transformTukey(nPFOStrans)) %>% 
+  mutate(PFDEAtrans = PFDEAorig + 11,
+         PFDEAtrans = transformTukey(PFDEAtrans)) %>% 
+  mutate(PFHXStrans = PFHXSorig +  11,
+         PFHXStrans = transformTukey(PFHXStrans)) %>%  #transformation results in lambda of 1
+  mutate(PFNAtrans = PFNAorig + 11, 
+         PFNAtrans = transformTukey(PFNAtrans)) %>%
+  mutate(PFUAtrans = PFUAorig +11,
+          PFUAtrans = transformTukey(PFUAtrans)) %>%
+  mutate(SbPFOAtrans = SbPFOAorig +11,
+        SbPFOAtrans = transformTukey(SbPFOAtrans)) %>%
+  mutate(SmPFOStrans = SmPFOSorig +11,
+        SmPFOStrans = transformTukey(SmPFOStrans)) %>%
+  mutate(str.duration.hrs = str.duration/60,
+         total.duration.hrs = total.duration/60) %>%
+  filter(Gender == "Male")
+
+min.frame <- FireChange %>%
+  dplyr::select(SubjectID, PFOSAorig, nPFOAorig, nPFOSorig, PFDEAorig, PFHXSorig, PFNAorig, PFUAorig, 
+                SbPFOAorig, SmPFOSorig) %>%
+  pivot_longer(names_to = "analyte", values_to = "value", cols = 2:10) %>%
+  group_by(analyte) %>%
+  summarise(m = abs(min(value))) %>%
+  ungroup() %>%
+  as.data.frame() %>%
+  mutate(analyte = gsub("orig", "", analyte))
+
+mean.frame <- FireChange %>%
+  dplyr::select(SubjectID, Ethnicity, PFOSAorig, nPFOAorig, nPFOSorig, PFDEAorig, PFHXSorig, PFNAorig, PFUAorig, 
+                SbPFOAorig, SmPFOSorig) %>%
+  pivot_longer(names_to = "analyte", values_to = "value", cols = 3:11) %>%
+  group_by(analyte, Ethnicity) %>%
+  summarise(mean = mean(value)) %>%
+  ungroup() %>%
+  as.data.frame() %>%
+  mutate(analyte = gsub("orig", "", analyte))
+
+mean.frame.trans <- FireChange %>%
+  dplyr::select(SubjectID, Ethnicity, PFOSAtrans, nPFOAtrans, nPFOStrans, PFDEAtrans, PFHXStrans, PFNAtrans, PFUAtrans, 
+                SbPFOAtrans, SmPFOStrans) %>%
+  pivot_longer(names_to = "analyte", values_to = "value", cols = 3:11) %>%
+  group_by(analyte, Ethnicity) %>%
+  summarise(mean_trans = mean(value)) %>%
+  ungroup() %>%
+  as.data.frame() %>%
+  mutate(analyte = gsub("trans", "", analyte))
+  
+
+```
+
+```{r read_in_fire_change_debugging_Julia Tukey transformations}
+
+# FireChange <- read.csv("/Users/Julia/Documents/StatsLab_UA/projects/Burgess/Nematollahi/data/Firefighter/FireChange.csv", header = T)
+FireChange2 <- FireChange %>%
+  mutate(PFOSAtrans.tmp = PFOSAorig  + 11, # We will want to go back to min(.$PFOSAorig)
+         nPFOAtrans.tmp = nPFOAorig + 11,  #AN, after adding min(.$) to all: "Error in in shapiro.test(TRANS) : all 'x' values are identical
+         nPFOStrans.tmp = nPFOSorig + 11,
+         PFDEAtrans.tmp = PFDEAorig + 11,
+         PFHXStrans.tmp = PFHXSorig +  11,
+         PFNAtrans.tmp = PFNAorig + 11, 
+         PFUAtrans.tmp = PFUAorig + 11,
+         SbPFOAtrans.tmp = SbPFOAorig + 11,
+         SmPFOStrans.tmp = SmPFOSorig + 11) %>%
+  mutate(PFOSAtrans = transformTukey(PFOSAtrans.tmp, plotit = F, quiet = T),
+         nPFOAtrans = transformTukey(nPFOAtrans.tmp, plotit = F, quiet = T),
+         nPFOStrans = transformTukey(nPFOStrans.tmp, plotit = F, quiet = T),
+         PFDEAtrans = transformTukey(PFDEAtrans.tmp, plotit = F, quiet = T),
+         PFHXStrans = transformTukey(PFHXStrans.tmp, plotit = F, quiet = T),
+         PFNAtrans = transformTukey(PFNAtrans.tmp, plotit = F, quiet = T),
+         PFUAtrans = transformTukey(PFUAtrans.tmp, plotit = F, quiet = T),
+         SbPFOAtrans = transformTukey(SbPFOAtrans.tmp, plotit = F, quiet = T),
+         SmPFOStrans = transformTukey(SmPFOStrans.tmp, plotit = F, quiet = T))
+
+# Note this for defining your lambdas if we use them again.
+PFOSAlambda <- as.numeric(transformTukey(FireChange2$PFOSAtrans.tmp, plotit = F, quiet = T, returnLambda = T)) 
+nPFOAlambda <- as.numeric(transformTukey(FireChange2$nPFOAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+nPFOSlambda <- as.numeric(transformTukey(FireChange2$nPFOStrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFDEAlambda <- as.numeric(transformTukey(FireChange2$PFDEAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFHXSlambda <- as.numeric(transformTukey(FireChange2$PFHXStrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFNAlambda <- as.numeric(transformTukey(FireChange2$PFNAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFUAlambda <- as.numeric(transformTukey(FireChange2$PFUAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+SbPFOAlambda <- as.numeric(transformTukey(FireChange2$SbPFOAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+SmPFOSlambda <- as.numeric(transformTukey(FireChange2$SmPFOStrans.tmp, plotit = F, quiet = T, returnLambda = T))
+
+```
+
+```{r Tukey Transformation lambdas, eval = F}
+
+  # PFOSAlambda = 9.95
+  # nPFOAlambda = 4.65
+  # nPFOSlambda = 3.125
+  # PFDEAlambda = -3.1
+  # PFHXSlambda = 1.125
+  # PFNAlambda = 4.6
+  # PFUAlambda = -1.825
+  # SbPFOAlambda = 5.95
+  # SmPFOSlambda = 2.95
+  # 
+  
+```
+
+
+```{r models for change in levels, eval = F}
+
+# For each PFAS create separate models for:
+# total structural number fire runs
+# total duration
+# structural fire duration
+# time (in years since baseline)
+# time since most recent fire run
+# time since MR structural fire
+# total number of fireruns
+
+#write a function for different variables
+
+# 6/30: removed women from FireChange, removed interaction term ethn.gen and replaced with Ethnicity
+#Had to change the structure of the code in the model statements a bit due to the following error:
+#Error in parse(text = trans_model_statement) : 
+#  <text>:1:67: unexpected '='
+#1: model_trans <- lm(PFOSAtrans ~ Ethnicity + total.num.firerunsdata =
+
+exp_fxn <-  function(dta, orig_outcome, trans_outcome, exp_outcome) {
+  orig_model_statement <- paste0("model_orig <- lm(", orig_outcome,
+                                 " ~ ", exp_outcome, " + Ethnicity, data = dta)")
+  eval(parse(text = orig_model_statement))
+  trans_model_statement <- paste0("model_trans <- lm(", trans_outcome, 
+                                 " ~ ", exp_outcome, " + Ethnicity, data = dta)")
+  eval(parse(text = trans_model_statement))
+  out <- list(model_orig = model_orig, 
+              model_trans = model_trans)
+}
+
+analytes <- c("PFOSA", "nPFOA", "nPFOS", "PFDEA", "PFHXS", "PFNA", "PFUA", "SbPFOA", "SmPFOS")
+exposures <- c("total.num.fireruns", "str.num.fireruns", "total.duration.hrs", "str.duration.hrs",
+               "days.since.MRF", "days.since.struc.MRF", "time.since.baseline")
+model_list <- list()
+mean.change <- data.frame(Ethnicity = as.character(),
+                           back.trans = as.numeric(), 
+                          lower.CL.back.trans = as.numeric(),
+                          upper.CL.back.trans = as.numeric(),
+                          emmean = as.numeric(),
+                          lower.CL = as.numeric(),
+                          upper.CL = as.numeric(),
+                          exposure = as.character(), 
+                          analyte = as.character(),
+                          back.trans.orig = as.numeric(),
+                          stringsAsFactors = FALSE)
+                        
+for (analyte in analytes) {
+  model_list[[analyte]] <- list() 
+  for (exposure in exposures) {
+  orig_var <- paste0(analyte, "orig")
+  trans_var <- paste0(analyte, "trans")
+  out_info <- exp_fxn(FireChange, orig_var, trans_var, exposure)
+  model_list[[analyte]][[exposure]] <- out_info
+  
+  meanNH <-  mean(FireChange %>% filter(Ethnicity== 'Non-hispanic') %>% .[, exposure], na.rm = TRUE)
+  meanH <-  mean(FireChange %>% filter(Ethnicity== 'Hispanic') %>% .[, exposure], na.rm = TRUE)
+  lambda <- eval(parse(text = paste0(analyte, "lambda")))
+  NH.mean.change <- eval(parse(text = paste0("emmeans(model_list[[analyte]][[exposure]]$model_trans, 'Ethnicity', at = list(", exposure, " = meanNH))"))) %>%
+    summary() %>%
+    filter(Ethnicity == "Non-hispanic") %>%
+    # mutate(lower.CL.back.trans = ifelse(lambda > 0, sign(lower.CL)*abs(lower.CL)^(1/lambda) ,
+    #        ifelse(lambda < 0, sign(-lower.CL)*abs(-lower.CL)^(1/(lambda)),
+    #               ifelse(lambda == 0, exp(lower.CL)  ,
+    #                      NA)))) %>%
+    # mutate(upper.CL.back.trans = ifelse(lambda > 0, sign(upper.CL)*abs(upper.CL)^(1/lambda) ,
+    #        ifelse(lambda < 0, sign(-upper.CL)*abs(-upper.CL)^(1/(lambda)),
+    #               ifelse(lambda == 0, exp(upper.CL)  ,
+    #                      NA)))) %>%
+    # mutate(back.trans = ifelse(lambda > 0, sign(emmean)*abs(emmean)^(1/lambda),
+    #        ifelse(lambda < 0, sign(-emmean)*abs(-emmean)^(1/(lambda)),
+    #               ifelse(lambda == 0, exp(emmean),
+    #                      NA)))) %>%
+    mutate(lower.CL.back.trans = ifelse(lambda > 0, lower.CL^(1/lambda),
+           ifelse(lambda < 0, -lower.CL^(1/lambda),
+                  ifelse(lambda == 0, exp(lower.CL),
+                         NA)))) %>%
+    mutate(upper.CL.back.trans = ifelse(lambda>0, upper.CL^(1/lambda),
+            ifelse(lambda<0, (-upper.CL)^(1/lambda),
+                  ifelse(lambda == 0, exp(upper.CL)  ,
+                         NA)))) %>%
+     mutate(back.trans = ifelse(lambda>0, emmean^(1/lambda),
+          ifelse(lambda<0, (-emmean)^(1/lambda),
+                  ifelse(lambda == 0, exp(emmean)  ,
+                         NA)))) %>%
+   mutate(Ethnicity = factor(as.character(Ethnicity))) %>%
+    dplyr::select(Ethnicity, back.trans, lower.CL.back.trans, upper.CL.back.trans, emmean, lower.CL, upper.CL)
+  
+  H.mean.change <- eval(parse(text = paste0("emmeans(model_list[[analyte]][[exposure]]$model_trans, 'Ethnicity', at = list(", exposure, " = meanH))"))) %>%
+   summary() %>%
+    filter(Ethnicity == "Hispanic") %>%
+    # mutate(lower.CL.back.trans = ifelse(lambda > 0, sign(lower.CL)*abs(lower.CL)^(1/lambda),
+    #        ifelse(lambda < 0, sign(-lower.CL)*abs(-lower.CL)^(1/((lambda))),
+    #               ifelse(lambda == 0, exp(lower.CL)  ,
+    #                      NA)))) %>%
+    # mutate(upper.CL.back.trans = ifelse(lambda > 0, sign(upper.CL)*abs(upper.CL)^(1/lambda),
+    #        ifelse(lambda < 0, sign(-upper.CL)*abs(-upper.CL)^(1/((lambda)))  ,
+    #               ifelse(lambda == 0, exp(upper.CL)  ,
+    #                      NA)))) %>%
+    #  mutate(back.trans = ifelse(lambda > 0, sign(emmean)*abs(emmean)^(1/lambda),
+    #        ifelse(lambda < 0, sign(-emmean)*abs(-emmean)^(1/((lambda))),
+    #               ifelse(lambda == 0, exp(emmean)  ,
+    #                      NA)))) %>%
+     mutate(lower.CL.back.trans = ifelse(lambda > 0, lower.CL^(1/lambda),
+           ifelse(lambda < 0, -lower.CL^(1/lambda),
+                  ifelse(lambda == 0, exp(lower.CL),
+                         NA)))) %>%
+    mutate(upper.CL.back.trans = ifelse(lambda>0, upper.CL^(1/lambda),
+            ifelse(lambda<0, (-upper.CL)^(1/lambda),
+                  ifelse(lambda == 0, exp(upper.CL)  ,
+                         NA)))) %>%
+     mutate(back.trans = ifelse(lambda>0, emmean^(1/lambda),
+          ifelse(lambda<0, (-emmean)^(1/lambda),
+                  ifelse(lambda == 0, exp(emmean)  ,
+                         NA)))) %>%
+    mutate(Ethnicity = factor(as.character(Ethnicity))) %>%
+    dplyr::select(Ethnicity, back.trans, lower.CL.back.trans, upper.CL.back.trans, emmean, lower.CL, upper.CL)
+  
+  mean.change <- rbind(mean.change,
+                       rbind(H.mean.change, NH.mean.change) %>%
+                         mutate(exposure = exposure,
+                          analyte = analyte) %>%
+                         left_join(min.frame, by = "analyte") %>%
+                         mutate(back.trans.orig = back.trans) %>%
+                         # mutate(upper.CL.back.trans = upper.CL.back.trans - m - 1,
+                         #        back.trans = back.trans - m - 1,
+                         #        lower.CL.back.trans = lower.CL.back.trans - m - 1) %>%
+                         mutate(upper.CL.back.trans = upper.CL.back.trans - 1,
+                                back.trans = back.trans - 1,
+                                lower.CL.back.trans = lower.CL.back.trans - 1) %>%
+                         dplyr::select(-m)) 
+  
+  
+#   if (lambda >  0){TRANS = x ^ lambda} 
+# if (lambda == 0){TRANS = log(x)} 
+# if (lambda <  0){TRANS = -1 * x ^ lambda} 
+
+  }
+  # ggarrange(plot(resid(out_info$model_orig) ~ fitted(out_info$model_orig)) + abline(h = 0),
+  #           plot(resid(out_info$model_trans) ~ fitted(out_info$model_trans)) + abline(h = 0),
+  #           qqnorm(resid(out_info$model_orig)),
+  #           qqnorm(resid(out_info$model_trans)),
+  #           nrow = 2, ncol = 2)
+  stargazer(model_list[[analyte]][[exposures[1]]]$model_trans, 
+            model_list[[analyte]][[exposures[2]]]$model_trans,
+            model_list[[analyte]][[exposures[3]]]$model_trans,
+            model_list[[analyte]][[exposures[4]]]$model_trans,
+            title = "Transformed PFAS Model Results", 
+            single.row = FALSE, header = FALSE,
+            omit.stat = c("f", "ser"), report = "vctp*", 
+            intercept.bottom = FALSE, intercept.top = TRUE,
+            # covariate.labels = c("Hispanic male", "Non-Hispanic female", "Hispanic female", "Total fireruns",
+            #                    "Age (years)", "BMI (kg/$m^{2}$)"),
+            digits = 3, font.size = "scriptsize")
+stargazer(model_list[[analyte]][[exposures[5]]]$model_trans,
+            model_list[[analyte]][[exposures[6]]]$model_trans,
+            model_list[[analyte]][[exposures[7]]]$model_trans,
+            title = "Transformed PFAS Model Results", 
+            single.row = FALSE, header = FALSE,
+            omit.stat = c("f", "ser"), report = "vctp*", 
+            intercept.bottom = FALSE, intercept.top = TRUE,
+            # covariate.labels = c("Hispanic male", "Non-Hispanic female", "Hispanic female", "Total fireruns",
+            #                    "Age (years)", "BMI (kg/$m^{2}$)"),
+            digits = 3, font.size = "scriptsize")
+
+#Give estimate of change score for hispanic and non-hispanic males
+        
+}
+
+
+true.mean <- mean.change %>%
+  filter(exposure == 'str.num.fireruns') %>%
+  left_join(mean.frame, by = c("Ethnicity", "analyte")) %>%
+  left_join(min.frame, by = 'analyte') %>%
+  mutate(dif = back.trans.orig - mean,
+         dif = round(dif, digits = 3)) 
+
+
+
+
+
+```
+
+```{r models for change in levels new, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
+
+# For each PFAS create separate models for:
+# total structural number fire runs
+# total duration
+# structural fire duration
+# time (in years since baseline)
+# time since most recent fire run
+# time since MR structural fire
+# total number of fireruns
+
+#write a function for different variables
+
+# 6/30: removed women from FireChange, removed interaction term ethn.gen and replaced with Ethnicity
+#Had to change the structure of the code in the model statements a bit due to the following error:
+#Error in parse(text = trans_model_statement) : 
+#  <text>:1:67: unexpected '='
+#1: model_trans <- lm(PFOSAtrans ~ Ethnicity + total.num.firerunsdata =
+
+exp_fxn <-  function(dta, orig_outcome, trans_outcome, exp_outcome) {
+  orig_model_statement <- paste0("model_orig <- lm(", orig_outcome,
+                                 " ~ ", exp_outcome, " + Ethnicity, data = dta)")
+  eval(parse(text = orig_model_statement))
+  trans_model_statement <- paste0("model_trans <- lm(", trans_outcome, 
+                                 " ~ ", exp_outcome, " + Ethnicity, data = dta)")
+  eval(parse(text = trans_model_statement))
+  out <- list(model_orig = model_orig, 
+              model_trans = model_trans)
+}
+
+analytes <- c("PFOSA", "nPFOA", "nPFOS", "PFDEA", "PFHXS", "PFNA", "PFUA", "SbPFOA", "SmPFOS")
+exposures <- c("total.num.fireruns", "str.num.fireruns", "total.duration.hrs", "str.duration.hrs",
+               "days.since.MRF", "days.since.struc.MRF", "time.since.baseline")
+model_list <- list()
+mean.change <- data.frame(Ethnicity = as.character(),
+                          emmean = as.numeric(),
+                          lower.CL = as.numeric(),
+                          upper.CL = as.numeric(),
+                          exposure = as.character(), 
+                          analyte = as.character(),
+                          stringsAsFactors = FALSE)
+
+for (analyte in analytes) {
+  for (exposure in exposures) {
+  orig_var <- paste0(analyte, "orig")
+  trans_var <- paste0(analyte, "trans")
+  out_info <- exp_fxn(FireChange, orig_var, trans_var, exposure)
+  ggarrange(plot(resid(out_info$model_orig) ~ fitted(out_info$model_orig)) + abline(h = 0),
+            plot(resid(out_info$model_trans) ~ fitted(out_info$model_trans)) + abline(h = 0),
+            qqnorm(resid(out_info$model_orig)),
+            qqnorm(resid(out_info$model_trans)),
+            nrow = 2, ncol = 2)
+  stargazer(out_info$model_trans)
+  }
+}
+                        
+for (analyte in analytes) {
+  model_list[[analyte]] <- list() 
+  for (exposure in exposures) {
+    orig_var <- paste0(analyte, "orig")
+    trans_var <- paste0(analyte, "trans")
+    out_info <- exp_fxn(FireChange2, orig_var, trans_var, exposure)
+    model_list[[analyte]][[exposure]] <- out_info
+    meanNH <-  mean(FireChange2 %>% filter(Ethnicity== 'Non-hispanic') %>% .[, exposure], na.rm = TRUE)
+    meanH <-  mean(FireChange2 %>% filter(Ethnicity== 'Hispanic') %>% .[, exposure], na.rm = TRUE)
+    NH.mean.change <- eval(parse(text = paste0("emmeans(model_list[[analyte]][[exposure]]$model_orig, 'Ethnicity', at = list(", exposure, " = meanNH))"))) %>%
+      summary() %>%
+      filter(Ethnicity == "Non-hispanic")
+    H.mean.change <- eval(parse(text = paste0("emmeans(model_list[[analyte]][[exposure]]$model_orig, 'Ethnicity', at = list(", exposure, " = meanH))"))) %>%
+      summary() %>%
+      filter(Ethnicity == "Hispanic")
+    mean.change <- rbind(mean.change,
+                         rbind(H.mean.change, NH.mean.change) %>%
+                           mutate(exposure = exposure,
+                                  analyte = analyte) %>%
+                           dplyr::select(-SE, -df)) 
+  }
+  
+
+  # print(ggarrange(plot(resid(out_info$model_orig) ~ fitted(out_info$model_orig)) + abline(h = 0),
+  #           plot(resid(out_info$model_trans) ~ fitted(out_info$model_trans)) + abline(h = 0),
+  #           qqnorm(resid(out_info$model_orig)),
+  #           qqnorm(resid(out_info$model_trans)),
+  #           nrow = 2, ncol = 2))
+  stargazer(model_list[[analyte]][[exposures[1]]]$model_orig, 
+            model_list[[analyte]][[exposures[2]]]$model_orig,
+            model_list[[analyte]][[exposures[3]]]$model_orig,
+            model_list[[analyte]][[exposures[4]]]$model_orig,
+            title = "PFAS Change Score Model Results (No Transformation)", 
+            single.row = FALSE, header = FALSE,
+            omit.stat = c("f", "ser"), report = "vctp*", 
+            intercept.bottom = FALSE, intercept.top = TRUE,
+            digits = 3, font.size = "scriptsize")
+  stargazer(model_list[[analyte]][[exposures[5]]]$model_orig,
+            model_list[[analyte]][[exposures[6]]]$model_orig,
+            model_list[[analyte]][[exposures[7]]]$model_orig,
+            title = "PFAS Change Score Model Results (No Transformation)", 
+            single.row = FALSE, header = FALSE,
+            omit.stat = c("f", "ser"), report = "vctp*", 
+            intercept.bottom = FALSE, intercept.top = TRUE,
+            digits = 3, font.size = "scriptsize")
+}
+
+
+true.mean <- mean.change %>%
+  filter(exposure == 'str.num.fireruns') %>%
+  left_join(mean.frame, by = c("Ethnicity", "analyte")) # You should compare these to the scatterplots (at least by eye).
+
+
+
+```
+
+
+```{r change_score_plots}
+
+# !PFOSA, PFUA, Sb-PFOA
+ggplot(FireChange2, aes(x = nPFOAorig)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = nPFOAtrans)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = nPFOSorig)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = nPFOStrans)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = PFDEAorig)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = PFDEAtrans)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = PFHXSorig)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = PFHXStrans)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = PFNAorig)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = PFNAtrans)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = SmPFOSorig)) +
+  geom_density() +
+  geom_rug()
+ggplot(FireChange2, aes(x = SmPFOStrans)) +
+  geom_density() +
+  geom_rug()
+
+nPFOAmdl <- lm(nPFOAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(nPFOAmdl) ~ fitted(nPFOAmdl))
+abline(h = 0)
+nPFOAmdl2 <- lm(nPFOAorig ~ total.num.fireruns + Ethnicity, data = FireChange2 %>% filter(nPFOAorig > -3))
+plot(resid(nPFOAmdl2) ~ fitted(nPFOAmdl2))
+abline(h = 0)
+nPFOAmdlT <- lm(nPFOAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(nPFOAmdlT) ~ fitted(nPFOAmdlT))
+abline(h = 0)
+
+nPFOSmdl <- lm(nPFOSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdl) ~ fitted(nPFOSmdl))
+abline(h = 0)
+nPFOSmdlT <- lm(nPFOStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdlT) ~ fitted(nPFOSmdlT))
+abline(h = 0)
+
+PFDEAmdl <- lm(PFDEAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdl) ~ fitted(PFDEAmdl))
+abline(h = 0)
+PFDEAmdlT <- lm(PFDEAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdlT) ~ fitted(PFDEAmdlT))
+abline(h = 0)
+
+PFHXSmdl <- lm(PFHXSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdl) ~ fitted(PFHXSmdl))
+abline(h = 0)
+PFHXSmdlT <- lm(PFHXStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(PFHXSmdlT) ~ fitted(PFHXSmdlT))
+abline(h = 0)
+
+PFNAmdl <- lm(PFNAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(PFNAmdl) ~ fitted(PFNAmdl))
+abline(h = 0)
+qqnorm(resid(PFNAmdl))
+qqline(resid(PFNAmdl))
+PFNAmdl2 <- lm(PFNAorig ~ total.num.fireruns + Ethnicity, data = FireChange2 %>% filter(PFNAorig > -8)) # Weird outlier causing problems
+plot(resid(PFNAmdl2) ~ fitted(PFNAmdl2))
+abline(h = 0)
+qqnorm(resid(PFNAmdl2))
+qqline(resid(PFNAmdl2))
+PFNAmdlT <- lm(PFNAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(PFNAmdlT) ~ fitted(PFNAmdlT))
+abline(h = 0)
+qqnorm(resid(PFNAmdlT))
+qqline(resid(PFNAmdlT))
+
+SmPFOSmdl <- lm(SmPFOSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdl) ~ fitted(SmPFOSmdl))
+abline(h = 0)
+qqnorm(resid(SmPFOSmdl))
+qqline(resid(SmPFOSmdl))
+
+
+```
+
+
+
+
