@@ -1,7 +1,7 @@
 ---
 title: "TFD longitudinal analyses"
 author: "Amy Nematollahi and Julia Fisher"
-date: "7/5/2020"
+date: "7/10/2020"
 output:
   pdf_document: default
   word_document: default
@@ -9,7 +9,6 @@ output:
 
 ```{r setup, echo = F}
 
-#test
 
 knitr::opts_chunk$set(echo = F, comment = F, warning = F, error = F, message = F, dev = 'pdf', results = 'hide')
 
@@ -48,9 +47,11 @@ require(lattice)
 library(rcompanion)
 library(emmeans)
 library(cowplot) #ggarrange
+library(gridGraphics)
 library(plotly)
 library(wesanderson)
 library(emmeans)
+library(olsrr)
 
 ```
 
@@ -387,7 +388,7 @@ TFDtuk <- TFDlong %>%
 ```
 
 
-```{r plot for all three factors, echo = F}
+```{r plot for all three factors, echo = F, eval = F}
 
 
 getOption('xtable.comment',TRUE)
@@ -429,7 +430,7 @@ lod.string.final4 <- gsub(" \\\\\\\\ ", " \\\\tabularnewline ", lod.string)
 \newpage
 \begin{landscape}
 
-```{r, results = 'asis'}
+```{r, results = 'asis', eval = F}
 
 cat(noquote(lod.string.final4))
 
@@ -475,7 +476,7 @@ For the densities, include a color grouping for time (1 or 2).
 For the scatterplots, include lines between data points from the same person (to get a better understanding of slope).  This corresponds to a grouping for each participant ID.  We could include an additional grouping for ethnicity by gender if we want or a facet for ethnicity by gender.
 
 
-```{r Table 1, results = 'asis'}
+```{r Table 1, results = 'asis', eval = F}
 
 #Put PFAS in separate table
 
@@ -518,7 +519,7 @@ save_kable(printTable, file = 'allTFDtable1.pdf')
 
 ```
 
-```{r PFAS table, results = 'asis'}
+```{r PFAS table, results = 'asis', eval = F}
 
 var_label(TFDlong) <- list(Status = "Firefighter Status")
 
@@ -543,7 +544,7 @@ printTable
 
 ```
 
-```{r plot PFAS/fire type}
+```{r plot PFAS/fire type, eval = F}
 
 #Fire type
 # Create two label vectors to allow easier labeling in the plots:
@@ -585,7 +586,7 @@ ggplot(df, aes(x = Status, y = log(value), fill = Status)) +
 
 ```
 
-```{r ggplots with time, results = "asis", dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300}
+```{r ggplots with time, results = "asis", dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, eval = F}
 
 ggplot(FireTuk, aes(x = total.duration, fill = Status)) +
   geom_rug() +
@@ -656,7 +657,7 @@ ggplot(subset(FireTuk, Status %in% c("RecruitRepeat")),
 ```
 
 
-```{r exposure scatterplots, results = "asis", dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+```{r exposure scatterplots, results = "asis", dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
 knitr::knit_hooks$set(optipng = knitr::hook_optipng)
 
 plot1 <- ggplot(FireTuk, aes(x = time.since.baseline, y = PFOSAorig, color = SubjectID)) +
@@ -1718,7 +1719,7 @@ true.mean <- mean.change %>%
 
 ```
 
-```{r models for change in levels new, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
+```{r models for change in levels NEW, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
 
 # For each PFAS create separate models for:
 # total structural number fire runs
@@ -1831,7 +1832,7 @@ true.mean <- mean.change %>%
 ```
 
 
-```{r change_score_plots}
+```{r change_score_plots, eval = F}
 
 # !PFOSA, PFUA, Sb-PFOA
 ggplot(FireChange2, aes(x = nPFOAorig)) +
@@ -1871,62 +1872,798 @@ ggplot(FireChange2, aes(x = SmPFOStrans)) +
   geom_density() +
   geom_rug()
 
+```
+
+
+```{r cooks distance function}
+
+
+cooks_distance_plot <- function(mdl) {
+  cooksd <- cooks.distance(mdl)
+  df.mdl <- length(coef(mdl))
+  df.resid <- df.residual(mdl)
+  cutoff <- qf(0.5, df1 = df.mdl, df2 = df.resid)
+  df <- data.frame(datapoint = 1:length(cooksd),
+                    cooks_distance = cooksd) %>%
+    mutate(cutoff = cutoff,
+           ok = ifelse(cooks_distance < cutoff, 'Fine', 'Excessive Influence'))
+  p <- ggplot(df,
+         aes(x = datapoint, y = cooks_distance, fill = ok)) +
+    geom_bar(stat = "identity") +
+    geom_hline(yintercept = cutoff, colour = "red") +
+    scale_fill_manual(limits = c("Fine", "Excessive Influence"),
+                      values = c("blue", "red")) +
+    labs(x = "Data Point Index",
+         y = "Cook's Distance",
+         title = paste0("Cook's Distance with Cutoff at 50% Percentile ",
+                        "of F(", df.mdl, ", ", df.resid, ") Distribution")) +
+    theme(plot.title = element_text(hjust = 0.5, size = 10),
+          axis.title = element_text(size = 10)) +
+    guides(fill = F)
+  return(list(plot = p,
+              problem_indices = df[which(df$ok == 'Excessive Influence'), 'datapoint']))
+}
+
+```
+
+```{r dfbeta function}
+
+
+fbetas_plot <- function(mdl, t = 'one') {
+  # t is the cutoff selected for use in the plot.
+  # It can take one of three values:  one, two, or sample size adjusted
+  
+  dfbetas <- dfbetas(mdl)
+  df.mdl <- length(coef(mdl))
+  df.resid <- df.residual(mdl)
+  
+  if (t == 'one') {
+    cutoff <- 1
+  } else if (t == 'two') {
+    cutoff <- 2
+  } else if (t == 'sample size adjusted') {
+    cutoff <- 2/sqrt(df.mdl + df.resid)
+  } else {
+    print('Invalid parameter t input.  Defaulting to t = 1.')
+    cutoff <- 1
+  }
+  
+  out <- list()
+  for (i in 1:ncol(dfbetas)) {
+    df <- data.frame(datapoint = 1:nrow(dfbetas),
+                     dfbeta = dfbetas[, i]) %>%
+      mutate(cutoff = cutoff,
+             ok = ifelse(dfbeta > -cutoff & dfbeta < cutoff, 'Fine', 'Excessive Influence'))
+    p <- ggplot(df, aes(x = datapoint, y = dfbeta, fill = ok)) +
+      geom_bar(stat = "identity") +
+      geom_hline(yintercept = cutoff, colour = "red") +
+      geom_hline(yintercept = -cutoff, colour = "red") +
+      scale_fill_manual(limits = c("Fine", "Excessive Influence"),
+                        values = c("blue", "red")) +
+      labs(x = "Data Point Index",
+           y = "DFBETA",
+           title = paste0("DFBETA Influence Measure on ", colnames(dfbetas)[i], "\nwith Cutoff at ", round(cutoff, 2))) +
+      theme(plot.title = element_text(hjust = 0.5, size = 10),
+            axis.title = element_text(size = 10)) +
+      guides(fill = F)
+    out[[colnames(dfbetas)[i]]] <- list(plot = p,
+                                        problem_indices = df[which(df$ok == 'Excessive Influence'), 'datapoint'])
+  }
+  return(out)
+}
+
+
+```
+
+```{r change function, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
+
+# theme.my.own <- function(){
+#   theme_bw()+
+#   theme(axis.text.x = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
+#         axis.text.y = element_text(size = 12),
+#         axis.title.x = element_text(size = 14, face = "plain"),             
+#         axis.title.y = element_text(size = 14, face = "plain"),             
+#         panel.grid.major.x = element_blank(),                                          
+#         panel.grid.minor.x = element_blank(),
+#         panel.grid.minor.y = element_blank(),
+#         panel.grid.major.y = element_blank(),  
+#         plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = , "cm"),
+#         plot.title = element_text(size = 20, vjust = 1, hjust = 0.5),
+#         legend.text = element_text(size = 12, face = "italic"),          
+#         legend.title = element_blank(),                              
+#         legend.position = c(0.9, 0.9))
+# }
+
+pfas.list <-  c("PFOSAorig", "nPFOAorig", "nPFOSorig", "PFDEAorig", "PFHXSorig", "PFNAorig", "PFUAorig", 
+                "SbPFOAorig", "SmPFOSorig")
+pfastrans.list <- c("PFOSAtrans", "nPFOAtrans", "nPFOStrans", "PFDEAtrans", "PFHXStrans",
+              "PFNAtrans", "PFUAtrans", "SbPFOAtrans", "SmPFOStrans")
+fire.list <-  c("total.num.fireruns", "str.num.fireruns", "total.duration.hrs", "str.duration.hrs",
+               "days.since.MRF", "days.since.struc.MRF", "time.since.baseline")
+
+change_plot_fxn <- function(df, pfas, pfas.trans, fire.var) {
+  pfas_orig <- paste0("pfasmdl <- lm(", pfas, " ~ ", fire.var, " + Ethnicity, data = df)")
+  eval(parse(text = pfas_orig))
+  pfas_trans <- paste0("transmdl <- lm(", pfas.trans, " ~ ", fire.var, " + Ethnicity, data = df)")
+  eval(parse(text = pfas_trans))
+  out <- list(pfasmdl = pfasmdl,
+              transmdl = transmdl)
+}
+
+for (pfas in pfas.list) {
+  pfas.name <- pfas
+  for (pfas.trans in pfastrans.list) {
+    Tpfas.name <- pfas.trans 
+  for (fire.var in fire.list) {
+    fire.name <- fire.var
+  out_info <- change_plot_fxn(FireChange2, pfas, pfas.trans, fire.var)
+  
+  #FItted vs. residuals 
+  ggarrange(plot(resid(out_info$pfasmdl) ~ fitted(out_info$pfasmdl), 
+                  main = paste0("Plot of", out_info$pfasmdl$terms[[2]], out_info$pfasmdl$terms[[3]])) +
+               abline(h = 0),
+            plot(resid(out_info$transmdl) ~ fitted(out_info$transmdl),
+                 main = paste0("Plot of", out_info$transmdl$terms[[2]], out_info$transmdl$terms[[3]])) +
+              abline(h = 0),
+            qqnorm(resid(out_info$pfasmdl)), 
+            qqnorm(resid(out_info$transmdl)),
+            nrow = 2, ncol = 2, labels = "auto")
+    }
+  }
+}
+
+```
+
+```{r CD plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
+
+  
+  for (pfas in pfas.list) {
+  pfas.name <- pfas
+  for (pfas.trans in pfastrans.list) {
+    Tpfas.name <- pfas.trans 
+  for (fire.var in fire.list) {
+    fire.name <- fire.var
+  out_info <- change_plot_fxn(FireChange2, pfas, pfas.trans, fire.var)
+   
+   #Cooks distance plots
+            CDplots <- sapply(list(out_info$pfasmdl, out_info$transmdl), cooks_distance_plot)
+            ggarrange(plotlist = CDplots,
+            labels = paste(out_info$pfasmdl$terms[[2]],
+                           out_info$pfasmdl$terms[[3]]))
+      }
+    }
+  }
+
+```
+
+
+```{r DFBETA plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
+  
+  for (pfas in pfas.list) {
+  pfas.name <- pfas
+  for (pfas.trans in pfastrans.list) {
+    Tpfas.name <- pfas.trans 
+  for (fire.var in fire.list) {
+    fire.name <- fire.var
+  out_info <- change_plot_fxn(FireChange2, pfas, pfas.trans, fire.var)
+  
+   #DFBETA plots
+            fbeta1 <- fbetas_plot(out_info$pfasmdl)
+            fbeta2 <- fbetas_plot(out_info$transmdl)
+            FBplots <-  list(fbeta1$`(Intercept)`$plot, fbeta1$total.num.fireruns$plot,
+                 fbeta1$EthnicityHispanic$plot, fbeta2$`(Intercept)`$plot,
+                 fbeta2$total.num.fireruns$plot, fbeta2$EthnicityHispanic$plot)
+            ggarrange(plotlist = FBplots)
+  
+       }
+     }
+  }
+
+```
+
+
+
+
+```{R change score residuals - total.num.fireruns, results = 'asis', dpi = 300, fig.width = 8, fig.height = 11, eval = F}
+
+
+
+#nPFOA ~ fireruns
 nPFOAmdl <- lm(nPFOAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(nPFOAmdl) ~ fitted(nPFOAmdl))
-abline(h = 0)
-nPFOAmdl2 <- lm(nPFOAorig ~ total.num.fireruns + Ethnicity, data = FireChange2 %>% filter(nPFOAorig > -3))
-plot(resid(nPFOAmdl2) ~ fitted(nPFOAmdl2))
-abline(h = 0)
+nPFOA.fireruns <- ggplot(data.frame(resid = resid(nPFOAmdl), fitted = fitted(nPFOAmdl)), 
+                          aes(x = fitted, y = resid)) +
+                          geom_point(size = 2) +
+                          geom_hline(yintercept = 0) +
+                          theme(axis.text = element_text(size = 15))
+nPFOAmdl2 <- lm(nPFOAorig ~ total.num.fireruns + Ethnicity, data = FireChange2 %>%
+                  filter(nPFOAorig > -3))
+nPFOA.fireruns2 <-  ggplot(data.frame(resid = resid(nPFOAmdl2), fitted = fitted(nPFOAmdl2)), 
+                          aes(x = fitted, y = resid)) +
+                          geom_point(size = 2) +
+                          geom_hline(yintercept = 0) +
+                          theme(axis.text = element_text(size = 15))
 nPFOAmdlT <- lm(nPFOAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(nPFOAmdlT) ~ fitted(nPFOAmdlT))
-abline(h = 0)
+nPFOAtrans.fireruns <-  ggplot(data.frame(resid = resid(nPFOAmdlT), fitted = fitted(nPFOAmdlT)), 
+                          aes(x = fitted, y = resid)) +
+                          geom_point(size = 2) +
+                          geom_hline(yintercept = 0) +
+                          theme(axis.text = element_text(size = 15))
+#Use transformed version
 
+
+grid.arrange(nPFOA.fireruns, nPFOA.fireruns2, nPFOAtrans.fireruns)
+
+
+plotscd1 <- sapply(list(nPFOAmdl, nPFOAmdl2, nPFOAmdlT), cooks_distance_plot)
+ggarrange(plotlist = plotscd1)
+
+fbeta1a <- fbetas_plot(nPFOAmdl)
+fbeta1b <- fbetas_plot(nPFOAmdl2)
+fbeta1c <- fbetas_plot(nPFOAmdlT)
+plotsf1 <-  list(fbeta1a$`(Intercept)`$plot, fbeta1a$total.num.fireruns$plot,
+                 fbeta1a$EthnicityHispanic$plot, fbeta1b$`(Intercept)`$plot,
+                 fbeta1b$total.num.fireruns$plot, fbeta1b$EthnicityHispanic$plot,
+                 fbeta1c$`(Intercept)`$plot, fbeta1c$total.num.fireruns$plot,
+                 fbeta1c$EthnicityHispanic$plot)
+ggarrange(plotlist = plotsf1)
+
+
+#nPFOS ~ fireruns
 nPFOSmdl <- lm(nPFOSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdl) ~ fitted(nPFOSmdl))
-abline(h = 0)
+nPFOS.fireruns <- ggplot(data.frame(resid = resid(nPFOSmdl), fitted = fitted(nPFOSmdl)), 
+                          aes(x = fitted, y = resid)) +
+                          geom_point(size = 2) +
+                          geom_hline(yintercept = 0) +
+                          theme(axis.text = element_text(size = 15))
 nPFOSmdlT <- lm(nPFOStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdlT) ~ fitted(nPFOSmdlT))
-abline(h = 0)
+nPFOStrans.fireruns <-  ggplot(data.frame(resid = resid(nPFOSmdlT), fitted = fitted(nPFOSmdlT)), 
+                          aes(x = fitted, y = resid)) +
+                          geom_point(size = 2) +
+                          geom_hline(yintercept = 0) +
+                          theme(axis.text = element_text(size = 15))
+#Use original version, check if points below -2 change the inference
+grid.arrange(nPFOS.fireruns, nPFOStrans.fireruns)
 
+plotscd2 <- sapply(list(nPFOSmdl, nPFOSmdlT), cooks_distance_plot)
+ggarrange(plotlist = plotscd2)
+
+fbeta2a <- fbetas_plot(nPFOSmdl)
+fbeta2b <- fbetas_plot(nPFOAmdlT)
+plotsf2 <-  list(fbeta2a$`(Intercept)`$plot, fbeta2a$total.num.fireruns$plot,
+                 fbeta2a$EthnicityHispanic$plot, fbeta2b$`(Intercept)`$plot,
+                 fbeta2b$total.num.fireruns$plot, fbeta2b$EthnicityHispanic$plot)
+ggarrange(plotlist = plotsf2)
+
+
+
+#PFDEA ~ fireruns
 PFDEAmdl <- lm(PFDEAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdl) ~ fitted(PFDEAmdl))
-abline(h = 0)
+PFDEA.fireruns <- ggplot(data.frame(resid = resid(PFDEAmdl), fitted = fitted(PFDEAmdl)), 
+                          aes(x = fitted, y = resid)) +
+                          geom_point(size = 2) +
+                          geom_hline(yintercept = 0) +
+                          theme(axis.text = element_text(size = 15))
 PFDEAmdlT <- lm(PFDEAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdlT) ~ fitted(PFDEAmdlT))
-abline(h = 0)
+PFDEAtrans.fireruns <-  ggplot(data.frame(resid = resid(PFDEAmdlT), fitted = fitted(PFDEAmdlT)), 
+                          aes(x = fitted, y = resid)) +
+                          geom_point(size = 2) +
+                          geom_hline(yintercept = 0) +
+                          theme(axis.text = element_text(size = 15))
+#Use original version, check if points below -2 change the inference
+grid.arrange(PFDEA.fireruns, PFDEAtrans.fireruns)
 
+plotscd3 <- sapply(list(PFDEAmdl, PFDEAmdlT), cooks_distance_plot)
+ggarrange(plotlist = plotscd3)
+
+fbeta3a <- fbetas_plot(PFDEAmdl)
+fbeta3b <- fbetas_plot(nPFOAmdlT)
+plotsf3 <-  list(fbeta3a$`(Intercept)`$plot, fbeta3a$total.num.fireruns$plot,
+                 fbeta3a$EthnicityHispanic$plot, fbeta3b$`(Intercept)`$plot,
+                 fbeta3b$total.num.fireruns$plot, fbeta3b$EthnicityHispanic$plot)
+ggarrange(plotlist = plotsf3)
+
+
+#PFHXS ~ fireruns
 PFHXSmdl <- lm(PFHXSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdl) ~ fitted(PFHXSmdl))
+PFHXS.fireruns <- plot(resid(PFHXSmdl) ~ fitted(PFHXSmdl))
 abline(h = 0)
 PFHXSmdlT <- lm(PFHXStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(PFHXSmdlT) ~ fitted(PFHXSmdlT))
+PFHXStrans.fireruns <- plot(resid(PFHXSmdlT) ~ fitted(PFHXSmdlT))
 abline(h = 0)
+#use the original version, look at those below -2 to see if inference changes
+plots4 <- list(PFHXS.fireruns, PFHXStrans.fireruns)
+ggarrange(plotlist = plots4, ncol = 2, nrow = 1)
 
+
+#PFNA ~ fireruns
 PFNAmdl <- lm(PFNAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(PFNAmdl) ~ fitted(PFNAmdl))
+PFNA.fireruns <- plot(resid(PFNAmdl) ~ fitted(PFNAmdl))
 abline(h = 0)
-qqnorm(resid(PFNAmdl))
-qqline(resid(PFNAmdl))
+# qqnorm(resid(PFNAmdl))
+# qqline(resid(PFNAmdl))
 PFNAmdl2 <- lm(PFNAorig ~ total.num.fireruns + Ethnicity, data = FireChange2 %>% filter(PFNAorig > -8)) # Weird outlier causing problems
-plot(resid(PFNAmdl2) ~ fitted(PFNAmdl2))
+PFNA.fireruns2 <- plot(resid(PFNAmdl2) ~ fitted(PFNAmdl2))
 abline(h = 0)
-qqnorm(resid(PFNAmdl2))
-qqline(resid(PFNAmdl2))
+#use original with >-8 removed
+#maybe also remove the point above 2 see what changes
 PFNAmdlT <- lm(PFNAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(PFNAmdlT) ~ fitted(PFNAmdlT))
+PFNAtrans.fireruns <- plot(resid(PFNAmdlT) ~ fitted(PFNAmdlT))
 abline(h = 0)
-qqnorm(resid(PFNAmdlT))
-qqline(resid(PFNAmdlT))
+plots5 <- list(PFNA.fireruns, PFNA.fireruns2, PFNAtrans.fireruns)
+ggarrange(plotlist = plots5, ncol = 1, nrow = 2)
 
+
+#SmPFOS ~ fireruns
 SmPFOSmdl <- lm(SmPFOSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdl) ~ fitted(SmPFOSmdl))
+SmPFOS.fireruns <- plot(resid(SmPFOSmdl) ~ fitted(SmPFOSmdl))
+plot(cooks.distance(SmPFOSmdl))
+plot(SmPFOSmdl)
+ols_plot_cooksd_bar(SmPFOSmdl)
 abline(h = 0)
-qqnorm(resid(SmPFOSmdl))
-qqline(resid(SmPFOSmdl))
+SmPFOStrans.fireruns <- SmPFOSmdlT <- lm(SmPFOStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdlT) ~ fitted(SmPFOSmdlT))
+abline(h = 0)
+plots6 <- list(SmPFOS.fireruns, SmPFOStrans.fireruns)
+ggarrange(plotlist = plots6, ncol = 1, nrow = 2)
+
+
+
+```
+
+```{R change score residuals - str.num.fireruns, results = 'asis', eval = F}
+
+#nPFOA ~ structural fireruns
+nPFOAmdl.str <- lm(nPFOAorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
+nPFOA.Sfireruns <- plot(resid(nPFOAmdl.str) ~ fitted(nPFOAmdl.str))
+abline(h = 0)
+nPFOAmdlT.str <- lm(nPFOAtrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
+nPFOAtrans.Sfireruns <-  plot(resid(nPFOAmdlT.str) ~ fitted(nPFOAmdlT.str))
+abline(h = 0)
+
+plots7 <- list(nPFOA.Sfireruns, nPFOAtrans.Sfireruns)
+ggarrange(plotlist = plots7, ncol = 2, nrow = 1)
+
+
+#nPFOS ~ structural fireruns
+nPFOSmdl.str <- lm(nPFOSorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
+nPFOS.Sfireruns <- plot(resid(nPFOSmdl.str) ~ fitted(nPFOSmdl.str))
+abline(h = 0)
+nPFOStrans.Sfireruns <- nPFOSmdlT.str <- lm(nPFOStrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdlT.str) ~ fitted(nPFOSmdlT.str))
+abline(h = 0)
+
+plots8 <- list(nPFOS.Sfireruns, nPFOStrans.Sfireruns)
+ggarrange(plotlist = plots8, ncol = 2, nrow = 1)
+
+
+#PFDEA ~ structural fireruns
+PFDEAmdl.str <- lm(PFDEAorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
+PFDEA.Sfireruns <- plot(resid(PFDEAmdl.str) ~ fitted(PFDEAmdl.str))
+abline(h = 0)
+PFDEAtrans.Sfireruns <- PFDEAmdlT.str <- lm(PFDEAtrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdlT.str) ~ fitted(PFDEAmdlT.str))
+abline(h = 0)
+#use original version
+plots9 <- list(PFDEA.Sfireruns, PFDEAtrans.Sfireruns)
+ggarrange(plotlist = plots9, ncol = 1, nrow = 2)
+
+
+#PFHXS ~ structural fireruns
+PFHXSmdl.str <- lm(PFHXSorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
+PFHXS.Sfireruns <- plot(resid(PFHXSmdl.str) ~ fitted(PFHXSmdl.str))
+abline(h = 0)
+PFHXSmdlT.str <- lm(PFHXStrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
+PFHXStrans.Sfireruns <- plot(resid(PFHXSmdlT.str) ~ fitted(PFHXSmdlT.str))
+abline(h = 0)
+
+plots10 <- list(PFHXS.Sfireruns, PFHXStrans.Sfireruns)
+ggarrange(plotlist = plots10, ncol = 2, nrow = 1)
+
+
+#PFNA ~ structural fireruns
+PFNAmdl.str <- lm(PFNAorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
+PFNA.Sfireruns <- plot(resid(PFNAmdl.str) ~ fitted(PFNAmdl.str))
+abline(h = 0)
+PFNAmdlT.str <- lm(PFNAtrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
+PFNAtrans.Sfireruns <- plot(resid(PFNAmdlT.str) ~ fitted(PFNAmdlT.str))
+abline(h = 0)
+plots11 <- list(PFNA.Sfireruns, PFNAtrans.Sfireruns)
+ggarrange(plotlist = plots11, ncol = 2, nrow = 1)
+
+
+#SmPFOS ~ structural fireruns
+SmPFOSmdl.str <- lm(SmPFOSorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
+SmPFOS.Sfireruns <- plot(resid(SmPFOSmdl.str) ~ fitted(SmPFOSmdl.str))
+abline(h = 0)
+SmPFOStrans.Sfireruns <- SmPFOSmdlT.str <- lm(SmPFOStrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdlT.str) ~ fitted(SmPFOSmdlT.str))
+abline(h = 0)
+plots12 <- list(SmPFOS.Sfireruns, SmPFOStrans.Sfireruns)
+ggarrange(plotlist = plots12, ncol = 2, nrow = 1)
+
 
 
 ```
 
 
+```{R change score residuals - days.since.struc.MRF, results = 'asis', eval = F}
+
+#nPFOA ~ Days since structural MRF fireruns
+nPFOAmdl.MRF <- lm(nPFOAorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+nPFOA.MRF <- plot(resid(nPFOAmdl.MRF) ~ fitted(nPFOAmdl.MRF))
+abline(h = 0)
+nPFOAmdlT.MRF <- lm(nPFOAtrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+nPFOAtrans.MRF <-  plot(resid(nPFOAmdlT.MRF) ~ fitted(nPFOAmdlT.MRF))
+abline(h = 0)
+
+plots13 <- list(nPFOA.MRF, nPFOAtrans.MRF)
+ggarrange(plotlist = plots13, ncol = 2, nrow = 1)
+
+
+#nPFOS ~ Days since structural MRF fireruns
+nPFOSmdl.MRF <- lm(nPFOSorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+nPFOS.MRF <- plot(resid(nPFOSmdl.MRF) ~ fitted(nPFOSmdl.MRF))
+abline(h = 0)
+nPFOStrans.MRF <- nPFOSmdlT.MRF <- lm(nPFOStrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdlT.MRF) ~ fitted(nPFOSmdlT.MRF))
+abline(h = 0)
+
+plots14 <- list(nPFOS.MRF, nPFOStrans.MRF)
+ggarrange(plotlist = plots14, ncol = 2, nrow = 1)
+
+#PFDEA ~ Days since structural MRF fireruns
+PFDEAmdl.MRF <- lm(PFDEAorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+PFDEA.MRF <- plot(resid(PFDEAmdl.MRF) ~ fitted(PFDEAmdl.MRF))
+abline(h = 0)
+PFDEAtrans.MRF <- PFDEAmdlT.MRF <- lm(PFDEAtrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdlT.MRF) ~ fitted(PFDEAmdlT.MRF))
+abline(h = 0)
+
+plots15 <- list(PFDEA.MRF, PFDEAtrans.MRF)
+ggarrange(plotlist = plots15, ncol = 1, nrow = 2)
+
+#PFHXS ~ Days since structural MRF fireruns
+PFHXSmdl.MRF <- lm(PFHXSorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+PFHXS.MRF <- plot(resid(PFHXSmdl.MRF) ~ fitted(PFHXSmdl.MRF))
+abline(h = 0)
+PFHXSmdlT.MRF <- lm(PFHXStrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+PFHXStrans.MRF <- plot(resid(PFHXSmdlT.MRF) ~ fitted(PFHXSmdlT.MRF))
+abline(h = 0)
+plots16 <- list(PFHXS.MRF, PFHXStrans.MRF)
+ggarrange(plotlist = plots16, ncol = 2, nrow = 1)
+
+
+#PFNA ~ Days since structural MRF fireruns
+PFNAmdl.MRS <- lm(PFNAorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+PFNA.MRS <- plot(resid(PFNAmdl.MRS) ~ fitted(PFNAmdl.MRS))
+abline(h = 0)
+PFNAmdlT.MRS <- lm(PFNAtrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+PFNAtrans.MRS <- plot(resid(PFNAmdlT.MRS) ~ fitted(PFNAmdlT.MRS))
+abline(h = 0)
+plots17 <- list(PFNA.MRS, PFNAtrans.MRS)
+ggarrange(plotlist = plots17, ncol = 2, nrow = 1)
+
+
+#SmPFOS ~ Days since structural MRF fireruns
+SmPFOSmdl.MRS <- lm(SmPFOSorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+SmPFOS.MRS <- plot(resid(SmPFOSmdl.MRS) ~ fitted(SmPFOSmdl.MRS))
+abline(h = 0)
+SmPFOStrans.MRS <- SmPFOSmdlT.MRS <- lm(SmPFOStrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdlT.MRS) ~ fitted(SmPFOSmdlT.MRS))
+abline(h = 0)
+plots18 <- list(SmPFOS.MRS, SmPFOStrans.MRS)
+ggarrange(plotlist = plots18, ncol = 2, nrow = 1)
+
+
+
+```
+
+```{R change score residuals - days.since.MRF, results = 'asis', eval = F}
+
+#nPFOA ~ Days since  MRF 
+nPFOAmdl.MRF <- lm(nPFOAorig ~ days.since.MRF + Ethnicity, data = FireChange2)
+nPFOA.MRF <- plot(resid(nPFOAmdl.MRF) ~ fitted(nPFOAmdl.MRF))
+abline(h = 0)
+nPFOAmdlT.MRF <- lm(nPFOAtrans ~ days.since.MRF + Ethnicity, data = FireChange2)
+nPFOAtrans.MRF <-  plot(resid(nPFOAmdlT.MRF) ~ fitted(nPFOAmdlT.MRF))
+abline(h = 0)
+
+plots19 <- list(nPFOA.MRF, nPFOAtrans.MRF)
+ggarrange(plotlist = plots19, ncol = 2, nrow = 1)
+
+
+#nPFOS ~ Days since  MRF 
+nPFOSmdl.MRF <- lm(nPFOSorig ~ days.since.MRF + Ethnicity, data = FireChange2)
+nPFOS.MRF <- plot(resid(nPFOSmdl.MRF) ~ fitted(nPFOSmdl.MRF))
+abline(h = 0)
+nPFOStrans.MRF <- nPFOSmdlT.MRF <- lm(nPFOStrans ~ days.since.MRF + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdlT.MRF) ~ fitted(nPFOSmdlT.MRF))
+abline(h = 0)
+plots20 <- list(nPFOS.MRF, nPFOStrans.MRF)
+ggarrange(plotlist = plots20, ncol = 2, nrow = 1)
+
+
+#PFDEA ~ Days since  MRF 
+PFDEAmdl.MRF <- lm(PFDEAorig ~ days.since.MRF + Ethnicity, data = FireChange2)
+PFDEA.MRF <- plot(resid(PFDEAmdl.MRF) ~ fitted(PFDEAmdl.MRF))
+abline(h = 0)
+PFDEAtrans.MRF <- PFDEAmdlT.MRF <- lm(PFDEAtrans ~ days.since.MRF + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdlT.MRF) ~ fitted(PFDEAmdlT.MRF))
+abline(h = 0)
+plots21 <- list(PFDEA.MRF, PFDEAtrans.MRF)
+ggarrange(plotlist = plots21, ncol = 1, nrow = 2)
+
+
+#PFHXS ~ Days since MRF 
+PFHXSmdl.MRF <- lm(PFHXSorig ~ days.since.MRF + Ethnicity, data = FireChange2)
+PFHXS.MRF <- plot(resid(PFHXSmdl.MRF) ~ fitted(PFHXSmdl.MRF))
+abline(h = 0)
+PFHXSmdlT.MRF <- lm(PFHXStrans ~ days.since.MRF + Ethnicity, data = FireChange2)
+PFHXStrans.MRF <- plot(resid(PFHXSmdlT.MRF) ~ fitted(PFHXSmdlT.MRF))
+abline(h = 0)
+plots22 <- list(PFHXS.MRF, PFHXStrans.MRF)
+ggarrange(plotlist = plots22, ncol = 2, nrow = 1)
+
+
+#PFNA ~ Days since  MRF 
+PFNAmdl.MRF <- lm(PFNAorig ~ days.since.MRF + Ethnicity, data = FireChange2)
+PFNA.MRF <- plot(resid(PFNAmdl.MRF) ~ fitted(PFNAmdl.MRF))
+abline(h = 0)
+PFNAmdlT.MRF <- lm(PFNAtrans ~ days.since.MRF + Ethnicity, data = FireChange2)
+PFNAtrans.MRF <- plot(resid(PFNAmdlT.MRF) ~ fitted(PFNAmdlT.MRF))
+abline(h = 0)
+plots23 <- list(PFNA.MRF, PFNAtrans.MRF)
+ggarrange(plotlist = plots23, ncol = 2, nrow = 1)
+
+
+#SmPFOS ~ Days since MRF 
+SmPFOSmdl.MRF <- lm(SmPFOSorig ~ days.since.MRF + Ethnicity, data = FireChange2)
+SmPFOS.MRF <- plot(resid(SmPFOSmdl.MRF) ~ fitted(SmPFOSmdl.MRF))
+abline(h = 0)
+SmPFOStrans.MRF <- SmPFOSmdlT.MRF <- lm(SmPFOStrans ~ days.since.MRF + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdlT.MRF) ~ fitted(SmPFOSmdlT.MRF))
+abline(h = 0)
+plots24 <- list(SmPFOS.MRF, SmPFOStrans.MRF)
+ggarrange(plotlist = plots24, ncol = 2, nrow = 1)
+
+
+
+```
+
+
+```{R change score residuals - time.since.baseline, results = 'asis', eval = F}
+
+#nPFOA ~ time since baseline
+nPFOAmdl.time <- lm(nPFOAorig ~ time.since.baseline + Ethnicity, data = FireChange2)
+nPFOA.time <- plot(resid(nPFOAmdl.time) ~ fitted(nPFOAmdl.time))
+abline(h = 0)
+nPFOAmdlT.time <- lm(nPFOAtrans ~ time.since.baseline + Ethnicity, data = FireChange2)
+nPFOAtrans.time <-  plot(resid(nPFOAmdlT.time) ~ fitted(nPFOAmdlT.time))
+abline(h = 0)
+
+plots25 <- list(nPFOA.time, nPFOAtrans.time)
+ggarrange(plotlist = plots25, ncol = 2, nrow = 1)
+
+
+#nPFOS ~ time since baseline
+nPFOSmdl.time <- lm(nPFOSorig ~ time.since.baseline + Ethnicity, data = FireChange2)
+nPFOS.time <- plot(resid(nPFOSmdl.time) ~ fitted(nPFOSmdl.time))
+abline(h = 0)
+nPFOStrans.time <- nPFOSmdlT.time <- lm(nPFOStrans ~ time.since.baseline + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdlT.time) ~ fitted(nPFOSmdlT.time))
+abline(h = 0)
+plots26 <- list(nPFOS.time, nPFOStrans.time)
+ggarrange(plotlist = plots26, ncol = 2, nrow = 1)
+
+
+#PFDEA ~ time since baseline
+PFDEAmdl.time <- lm(PFDEAorig ~ time.since.baseline + Ethnicity, data = FireChange2)
+PFDEA.time <- plot(resid(PFDEAmdl.time) ~ fitted(PFDEAmdl.time))
+abline(h = 0)
+PFDEAtrans.time <- PFDEAmdlT.time <- lm(PFDEAtrans ~ time.since.baseline + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdlT.time) ~ fitted(PFDEAmdlT.time))
+abline(h = 0)
+plots27 <- list(PFDEA.time, PFDEAtrans.time)
+ggarrange(plotlist = plots27, ncol = 1, nrow = 2)
+
+
+#PFHXS ~ time since baseline
+PFHXSmdl.time <- lm(PFHXSorig ~ time.since.baseline + Ethnicity, data = FireChange2)
+PFHXS.time <- plot(resid(PFHXSmdl.time) ~ fitted(PFHXSmdl.time))
+abline(h = 0)
+PFHXSmdlT.time <- lm(PFHXStrans ~ time.since.baseline + Ethnicity, data = FireChange2)
+PFHXStrans.time <- plot(resid(PFHXSmdlT.time) ~ fitted(PFHXSmdlT.time))
+abline(h = 0)
+plots28 <- list(PFHXS.time, PFHXStrans.time)
+ggarrange(plotlist = plots28, ncol = 2, nrow = 1)
+
+
+#PFNA ~ time since baseline
+PFNAmdl.time <- lm(PFNAorig ~ time.since.baseline + Ethnicity, data = FireChange2)
+PFNA.time <- plot(resid(PFNAmdl.time) ~ fitted(PFNAmdl.time))
+abline(h = 0)
+PFNAmdlT.time <- lm(PFNAtrans ~ time.since.baseline + Ethnicity, data = FireChange2)
+PFNAtrans.time <- plot(resid(PFNAmdlT.time) ~ fitted(PFNAmdlT.time))
+abline(h = 0)
+plots29 <- list(PFNA.time, PFNAtrans.time)
+ggarrange(plotlist = plots29, ncol = 2, nrow = 1)
+
+
+#SmPFOS ~ time since baseline
+SmPFOSmdl.time <- lm(SmPFOSorig ~ time.since.baseline + Ethnicity, data = FireChange2)
+SmPFOS.time <- plot(resid(SmPFOSmdl.time) ~ fitted(SmPFOSmdl.time))
+abline(h = 0)
+SmPFOStrans.time <- SmPFOSmdlT.time <- lm(SmPFOStrans ~ time.since.baseline + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdlT.time) ~ fitted(SmPFOSmdlT.time))
+abline(h = 0)
+plots30 <- list(SmPFOS.time, SmPFOStrans.time)
+ggarrange(plotlist = plots30, ncol = 2, nrow = 1)
+
+
+
+```
+
+
+
+```{R change score residuals - total.duration, results = 'asis', eval = F}
+
+#nPFOA ~ total duration
+nPFOAmdl.duration <- lm(nPFOAorig ~ total.duration + Ethnicity, data = FireChange2)
+nPFOA.duration <- plot(resid(nPFOAmdl.duration) ~ fitted(nPFOAmdl.duration))
+abline(h = 0)
+nPFOAmdlT.duration <- lm(nPFOAtrans ~ total.duration + Ethnicity, data = FireChange2)
+nPFOAtrans.duration <-  plot(resid(nPFOAmdlT.duration) ~ fitted(nPFOAmdlT.duration))
+abline(h = 0)
+
+plots31 <- list(nPFOA.duration, nPFOAtrans.duration)
+ggarrange(plotlist = plots31, ncol = 2, nrow = 1)
+
+
+#nPFOS ~ total duration
+nPFOSmdl.duration <- lm(nPFOSorig ~ total.duration + Ethnicity, data = FireChange2)
+nPFOS.duration <- plot(resid(nPFOSmdl.duration) ~ fitted(nPFOSmdl.duration))
+abline(h = 0)
+nPFOStrans.duration <- nPFOSmdlT.duration <- lm(nPFOStrans ~ total.duration + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdlT.duration) ~ fitted(nPFOSmdlT.duration))
+abline(h = 0)
+plots32 <- list(nPFOS.duration, nPFOStrans.duration)
+ggarrange(plotlist = plots32, ncol = 2, nrow = 1)
+
+
+#PFDEA ~ total duration
+PFDEAmdl.duration <- lm(PFDEAorig ~ total.duration + Ethnicity, data = FireChange2)
+PFDEA.duration <- plot(resid(PFDEAmdl.duration) ~ fitted(PFDEAmdl.duration))
+abline(h = 0)
+PFDEAtrans.duration <- PFDEAmdlT.duration <- lm(PFDEAtrans ~ total.duration + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdlT.duration) ~ fitted(PFDEAmdlT.duration))
+abline(h = 0)
+plots33 <- list(PFDEA.duration, PFDEAtrans.duration)
+ggarrange(plotlist = plots33, ncol = 1, nrow = 2)
+
+
+#PFHXS ~ total duration
+PFHXSmdl.duration <- lm(PFHXSorig ~ total.duration + Ethnicity, data = FireChange2)
+PFHXS.duration <- plot(resid(PFHXSmdl.duration) ~ fitted(PFHXSmdl.duration))
+abline(h = 0)
+PFHXSmdlT.duration <- lm(PFHXStrans ~ total.duration + Ethnicity, data = FireChange2)
+PFHXStrans.duration <- plot(resid(PFHXSmdlT.duration) ~ fitted(PFHXSmdlT.duration))
+abline(h = 0)
+plots34 <- list(PFHXS.duration, PFHXStrans.duration)
+ggarrange(plotlist = plots34, ncol = 2, nrow = 1)
+
+
+#PFNA ~ total duration
+PFNAmdl.duration <- lm(PFNAorig ~ total.duration + Ethnicity, data = FireChange2)
+PFNA.duration <- plot(resid(PFNAmdl.duration) ~ fitted(PFNAmdl.duration))
+abline(h = 0)
+PFNAmdlT.duration <- lm(PFNAtrans ~ total.duration + Ethnicity, data = FireChange2)
+PFNAtrans.duration <- plot(resid(PFNAmdlT.duration) ~ fitted(PFNAmdlT.duration))
+abline(h = 0)
+plots35 <- list(PFNA.duration, PFNAtrans.duration)
+ggarrange(plotlist = plots35, ncol = 2, nrow = 1)
+
+
+#SmPFOS ~ total duration
+SmPFOSmdl.duration <- lm(SmPFOSorig ~ total.duration + Ethnicity, data = FireChange2)
+SmPFOS.duration <- plot(resid(SmPFOSmdl.duration) ~ fitted(SmPFOSmdl.duration))
+abline(h = 0)
+SmPFOStrans.duration <- SmPFOSmdlT.duration <- lm(SmPFOStrans ~ total.duration + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdlT.duration) ~ fitted(SmPFOSmdlT.duration))
+abline(h = 0)
+plots36 <- list(SmPFOS.duration, SmPFOStrans.duration)
+ggarrange(plotlist = plots36, ncol = 2, nrow = 1)
+
+
+
+```
+
+
+```{R change score residuals - str.duration, results = 'asis', eval = F}
+
+#nPFOA ~ structural duration
+nPFOAmdl.str.duration <- lm(nPFOAorig ~ str.duration + Ethnicity, data = FireChange2)
+nPFOA.str.duration <- plot(resid(nPFOAmdl.str.duration) ~ fitted(nPFOAmdl.str.duration))
+abline(h = 0)
+nPFOAmdlT.str.duration <- lm(nPFOAtrans ~ str.duration + Ethnicity, data = FireChange2)
+nPFOAtrans.str.duration <-  plot(resid(nPFOAmdlT.str.duration) ~ fitted(nPFOAmdlT.str.duration))
+abline(h = 0)
+
+plots37 <- list(nPFOA.str.duration, nPFOAtrans.str.duration)
+ggarrange(plotlist = plots37, ncol = 2, nrow = 1)
+
+
+#nPFOS ~ structural duration
+nPFOSmdl.str.duration <- lm(nPFOSorig ~ str.duration + Ethnicity, data = FireChange2)
+nPFOS.str.duration <- plot(resid(nPFOSmdl.str.duration) ~ fitted(nPFOSmdl.str.duration))
+abline(h = 0)
+nPFOStrans.str.duration <- nPFOSmdlT.str.duration <- lm(nPFOStrans ~ str.duration + Ethnicity, data = FireChange2)
+plot(resid(nPFOSmdlT.str.duration) ~ fitted(nPFOSmdlT.str.duration))
+abline(h = 0)
+plots38 <- list(nPFOS.str.duration, nPFOStrans.str.duration)
+ggarrange(plotlist = plots38, ncol = 2, nrow = 1)
+
+
+#PFDEA ~ structural duration
+PFDEAmdl.str.duration <- lm(PFDEAorig ~ str.duration + Ethnicity, data = FireChange2)
+PFDEA.str.duration <- plot(resid(PFDEAmdl.str.duration) ~ fitted(PFDEAmdl.str.duration))
+abline(h = 0)
+PFDEAtrans.str.duration <- PFDEAmdlT.str.duration <- lm(PFDEAtrans ~ str.duration + Ethnicity, data = FireChange2)
+plot(resid(PFDEAmdlT.str.duration) ~ fitted(PFDEAmdlT.str.duration))
+abline(h = 0)
+plots39 <- list(PFDEA.str.duration, PFDEAtrans.str.duration)
+ggarrange(plotlist = plots39, ncol = 1, nrow = 2)
+
+
+#PFHXS ~ structural duration
+PFHXSmdl.str.duration <- lm(PFHXSorig ~ str.duration + Ethnicity, data = FireChange2)
+PFHXS.str.duration <- plot(resid(PFHXSmdl.str.duration) ~ fitted(PFHXSmdl.str.duration))
+abline(h = 0)
+PFHXSmdlT.str.duration <- lm(PFHXStrans ~ str.duration + Ethnicity, data = FireChange2)
+PFHXStrans.str.duration <- plot(resid(PFHXSmdlT.str.duration) ~ fitted(PFHXSmdlT.str.duration))
+abline(h = 0)
+plots40 <- list(PFHXS.str.duration, PFHXStrans.str.duration)
+ggarrange(plotlist = plots40, ncol = 2, nrow = 1)
+
+
+#PFNA ~ structural duration
+PFNAmdl.str.duration <- lm(PFNAorig ~ str.duration + Ethnicity, data = FireChange2)
+PFNA.str.duration <- plot(resid(PFNAmdl.str.duration) ~ fitted(PFNAmdl.str.duration))
+abline(h = 0)
+PFNAmdlT.str.duration <- lm(PFNAtrans ~ str.duration + Ethnicity, data = FireChange2)
+PFNAtrans.str.duration <- plot(resid(PFNAmdlT.str.duration) ~ fitted(PFNAmdlT.str.duration))
+abline(h = 0)
+plots41 <- list(PFNA.str.duration, PFNAtrans.str.duration)
+ggarrange(plotlist = plots41, ncol = 2, nrow = 1)
+
+
+#SmPFOS ~ structural duration
+SmPFOSmdl.str.duration <- lm(SmPFOSorig ~ str.duration + Ethnicity, data = FireChange2)
+SmPFOS.str.duration <- plot(resid(SmPFOSmdl.str.duration) ~ fitted(SmPFOSmdl.str.duration))
+abline(h = 0)
+SmPFOStrans.str.duration <- SmPFOSmdlT.str.duration <- lm(SmPFOStrans ~ str.duration + Ethnicity, data = FireChange2)
+plot(resid(SmPFOSmdlT.str.duration) ~ fitted(SmPFOSmdlT.str.duration))
+abline(h = 0)
+plots42 <- list(SmPFOS.str.duration, SmPFOStrans.str.duration)
+ggarrange(plotlist = plots42, ncol = 2, nrow = 1)
+
+
+
+```
+
+For every change score models, get more diagnostic information (cooks distance, and dfbetas) for both original and transformed models: https://cran.r-project.org/web/packages/olsrr/vignettes/influence_measures.html
+
+options: get rid of a point or two, or transform. would probably prefer to transform because we can leave the point in the model. 
+Use ggarrange to condense the output a little
+
+* Look through residuals.
+* Get rid of age and bmi from change scores.
+* Add in baseline pfas to each model as follow-up as sensitivity
+* add each age & bmi as sensitivity
+* Take women out. Done. still need to ask Dean about this.
+* We have a month.
+* I should look through Amy’s incumbent vs. new recruit info.
+* Make sure longitudinal models are done
+* need to do dichotomous models
+* Think about how to control for multiple comparisons
 
 
