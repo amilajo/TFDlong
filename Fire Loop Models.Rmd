@@ -1,7 +1,7 @@
 ---
 title: "TFD longitudinal analyses"
 author: "Amy Nematollahi and Julia Fisher"
-date: "7/10/2020"
+date: "7/16/2020"
 output:
   pdf_document: default
   word_document: default
@@ -1878,7 +1878,7 @@ ggplot(FireChange2, aes(x = SmPFOStrans)) +
 ```{r cooks distance function}
 
 
-cooks_distance_plot <- function(mdl) {
+cooks_distance_plot <- function(mdl, st) { #added subtitle (st) in function for printing purposes
   cooksd <- cooks.distance(mdl)
   df.mdl <- length(coef(mdl))
   df.resid <- df.residual(mdl)
@@ -1896,7 +1896,8 @@ cooks_distance_plot <- function(mdl) {
     labs(x = "Data Point Index",
          y = "Cook's Distance",
          title = paste0("Cook's Distance with Cutoff at 50% Percentile ",
-                        "of F(", df.mdl, ", ", df.resid, ") Distribution")) +
+                        "of F(", df.mdl, ", ", df.resid, ") Distribution"),
+         subtitle = st) +
     theme(plot.title = element_text(hjust = 0.5, size = 10),
           axis.title = element_text(size = 10)) +
     guides(fill = F)
@@ -1909,7 +1910,7 @@ cooks_distance_plot <- function(mdl) {
 ```{r dfbeta function}
 
 
-fbetas_plot <- function(mdl, t = 'one') {
+fbetas_plot <- function(mdl, st, t = 'one') { #added subtitle (st) for printing purposes
   # t is the cutoff selected for use in the plot.
   # It can take one of three values:  one, two, or sample size adjusted
   
@@ -1942,7 +1943,8 @@ fbetas_plot <- function(mdl, t = 'one') {
                         values = c("blue", "red")) +
       labs(x = "Data Point Index",
            y = "DFBETA",
-           title = paste0("DFBETA Influence Measure on ", colnames(dfbetas)[i], "\nwith Cutoff at ", round(cutoff, 2))) +
+           title = paste0("DFBETA Influence Measure on ", colnames(dfbetas)[i], "\nwith Cutoff at ", round(cutoff, 2)),
+           subtitle = st) +
       theme(plot.title = element_text(hjust = 0.5, size = 10),
             axis.title = element_text(size = 10)) +
       guides(fill = F)
@@ -1955,24 +1957,9 @@ fbetas_plot <- function(mdl, t = 'one') {
 
 ```
 
-```{r change function, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
+```{r change function, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
 
-# theme.my.own <- function(){
-#   theme_bw()+
-#   theme(axis.text.x = element_text(size = 12, angle = 45, vjust = 1, hjust = 1),
-#         axis.text.y = element_text(size = 12),
-#         axis.title.x = element_text(size = 14, face = "plain"),             
-#         axis.title.y = element_text(size = 14, face = "plain"),             
-#         panel.grid.major.x = element_blank(),                                          
-#         panel.grid.minor.x = element_blank(),
-#         panel.grid.minor.y = element_blank(),
-#         panel.grid.major.y = element_blank(),  
-#         plot.margin = unit(c(0.5, 0.5, 0.5, 0.5), units = , "cm"),
-#         plot.title = element_text(size = 20, vjust = 1, hjust = 0.5),
-#         legend.text = element_text(size = 12, face = "italic"),          
-#         legend.title = element_blank(),                              
-#         legend.position = c(0.9, 0.9))
-# }
+knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
 pfas.list <-  c("PFOSAorig", "nPFOAorig", "nPFOSorig", "PFDEAorig", "PFHXSorig", "PFNAorig", "PFUAorig", 
                 "SbPFOAorig", "SmPFOSorig")
@@ -1990,70 +1977,150 @@ change_plot_fxn <- function(df, pfas, pfas.trans, fire.var) {
               transmdl = transmdl)
 }
 
-for (pfas in pfas.list) {
-  pfas.name <- pfas
-  for (pfas.trans in pfastrans.list) {
-    Tpfas.name <- pfas.trans 
+for (i in 1:length(pfas.list)) {
+  pfas.name <- pfas.list[i]
+  Tpfas.name <- pfastrans.list[i]
   for (fire.var in fire.list) {
-    fire.name <- fire.var
-  out_info <- change_plot_fxn(FireChange2, pfas, pfas.trans, fire.var)
+    out_info <- change_plot_fxn(FireChange2, pfas.name, Tpfas.name, fire.var)
+    
+    #FItted vs. residuals 
+    orig.resid<- ggplot(data.frame(resid = resid(out_info$pfasmdl), 
+                                   fitted = fitted(out_info$pfasmdl)), 
+                        aes(x = fitted, y = resid)) +
+      geom_point(size = 2) +
+      geom_hline(yintercept = 0) +
+      theme(axis.text = element_text(size = 10),
+            plot.title = element_text(hjust = 0.5)) +  
+      labs(title = paste0(out_info$pfasmdl$terms[[2]], ": ",
+                          out_info$pfasmdl$terms[[3]][2]))
+    trans.resid <- ggplot(data.frame(resid = resid(out_info$transmdl), 
+                                     fitted = fitted(out_info$transmdl)), 
+                          aes(x = fitted, y = resid)) +
+      geom_point(size = 2) +
+      geom_hline(yintercept = 0) +
+      theme(axis.text = element_text(size = 10),
+            plot.title = element_text(hjust = 0.5)) +
+      labs(title = paste0(out_info$transmdl$terms[[2]], ": ",
+                          out_info$pfasmdl$terms[[3]][2])) 
+    
+    ys.orig <- quantile(qqnorm(resid(out_info$pfasmdl), plot.it = F)$y, probs = c(0.25, 0.75),
+                        qtype = 7)
+    xs.orig <- quantile(qqnorm(resid(out_info$pfasmdl), plot.it = F)$x, probs = c(0.25, 0.75),
+                        qtype = 7)
+    m.orig <- (ys.orig[2] - ys.orig[1])/(xs.orig[2] - xs.orig[1])
+    b.orig <- ys.orig[2] - m.orig*xs.orig[2]
+    
+    ys.trans <- quantile(qqnorm(resid(out_info$transmdl), plot.it = F)$y, 
+                         probs = c(0.25, 0.75), qtype = 7)
+    xs.trans <- quantile(qqnorm(resid(out_info$transmdl), plot.it = F)$x, probs = c(0.25, 0.75), 
+                         qtype = 7)
+    m.trans <- (ys.trans[2] - ys.trans[1])/(xs.trans[2] - xs.trans[1])
+    b.trans <- ys.trans[2] - m.trans*xs.trans[2]
+   
+  assumptions.df <- data.frame(orig_qq_theor = qqnorm(resid(out_info$pfasmdl), plot.it = F)$x,
+                               orig_qq_samp = qqnorm(resid(out_info$pfasmdl), plot.it = F)$y,
+                                                              stringsAsFactors = F)
   
-  #FItted vs. residuals 
-  ggarrange(plot(resid(out_info$pfasmdl) ~ fitted(out_info$pfasmdl), 
-                  main = paste0("Plot of", out_info$pfasmdl$terms[[2]], out_info$pfasmdl$terms[[3]])) +
-               abline(h = 0),
-            plot(resid(out_info$transmdl) ~ fitted(out_info$transmdl),
-                 main = paste0("Plot of", out_info$transmdl$terms[[2]], out_info$transmdl$terms[[3]])) +
-              abline(h = 0),
-            qqnorm(resid(out_info$pfasmdl)), 
-            qqnorm(resid(out_info$transmdl)),
-            nrow = 2, ncol = 2, labels = "auto")
-    }
+  assumptions.df.t <- data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl), 
+                                                         plot.it = F)$x,
+                               trans_qq_samp = qqnorm(resid(out_info$transmdl), plot.it = F)$y,
+                                                              stringsAsFactors = F)
+
+qq.plot.orig <- ggplot(assumptions.df, aes(x = orig_qq_theor, y = orig_qq_samp)) +
+    geom_point() + 
+    geom_abline(intercept = b.orig, slope = m.orig) +
+    labs(x = "Theoretical Quantiles",
+         y = "Sample Quantiles",
+         title = paste0(out_info$pfasmdl$terms[[2]], ": ",
+                          out_info$pfasmdl$terms[[3]][2]))  +
+    theme(plot.title = element_text(hjust = 0.5, size = 10),
+          axis.title = element_text(size = 10))
+
+qq.plot.trans <- ggplot(assumptions.df.t, aes(x = trans_qq_theor, y = trans_qq_samp)) +
+    geom_point() + 
+    geom_abline(intercept = b.trans, slope = m.trans) +
+    labs(x = "Theoretical Quantiles",
+         y = "Sample Quantiles",
+         title = paste0(out_info$transmdl$terms[[2]], ": ",
+                          out_info$transmdl$terms[[3]][2]))  + 
+    theme(plot.title = element_text(hjust = 0.5, size = 10),
+          axis.title = element_text(size = 10))
+
+#Cooks distance plots
+cd.plot.orig <-  cooks_distance_plot(out_info$pfasmdl, 
+                                     paste0(out_info$pfasmdl$terms[[2]], ": ",
+                                            out_info$pfasmdl$terms[[3]][2]))
+
+  
+cd.plot.trans <- cooks_distance_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
+                                                               out_info$transmdl$terms[[3]][2]))
+
+#DFBETA plots
+fbeta1 <- fbetas_plot(out_info$pfasmdl, paste0(out_info$pfasmdl$terms[[2]], ": ",
+                                                     out_info$pfasmdl$terms[[3]][2]))
+fbeta2 <- fbetas_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
+                                                      out_info$transmdl$terms[[3]][2]))
+
+plotlist.a <- list(orig.resid, trans.resid, qq.plot.orig, qq.plot.trans, 
+                   cd.plot.orig, cd.plot.trans)
+plotlist.b <- list(fbeta1$`(Intercept)`$plot, 
+                   paste0("fbeta1$",out_info$pfasmdl$terms[[3]][[2]],"$plot", sep = ""), 
+                   fbeta1$EthnicityHispanic$plot, 
+                   fbeta2$`(Intercept)`$plot, 
+                   paste0("fbeta2$",out_info$transmdl$terms[[3]][[2]],"$plot", sep = ""),
+                   fbeta2$EthnicityHispanic$plot)
+
+print(ggarrange(plotlist = plotlist.a, nrow = 5, ncol = 2))
+print(ggarrange(plotlist = plotlist.b, nrow = 4, ncol = 2))
+    
+    
+  }
+}
+
+
+```
+
+add CD plots and DFBETA plots to forloop above to keep all relevant mdls together
+interpret results
+Write function for sensitivity analyses
+
+```{r CD plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
+
+
+for (i in 1:length(pfas.list)) {
+  pfas.name <- pfas.list[i]
+  Tpfas.name <- pfastrans.list[i]
+  for (fire.var in fire.list) {
+    out_info <- change_plot_fxn(FireChange2, pfas.name, Tpfas.name, fire.var)
+    
+    #Cooks distance plots
+    CDplots <- sapply(list(out_info$pfasmdl, out_info$transmdl), cooks_distance_plot)
+    print(ggarrange(plotlist = CDplots,
+              labels = paste(out_info$pfasmdl$terms[[2]],
+                             out_info$pfasmdl$terms[[3]])))
   }
 }
 
 ```
 
-```{r CD plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
 
+```{r DFBETA plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
   
-  for (pfas in pfas.list) {
-  pfas.name <- pfas
-  for (pfas.trans in pfastrans.list) {
-    Tpfas.name <- pfas.trans 
+for (i in 1:length(pfas.list)) {
+  pfas.name <- pfas.list[i]
+  Tpfas.name <- pfastrans.list[i]
   for (fire.var in fire.list) {
-    fire.name <- fire.var
-  out_info <- change_plot_fxn(FireChange2, pfas, pfas.trans, fire.var)
-   
-   #Cooks distance plots
-            CDplots <- sapply(list(out_info$pfasmdl, out_info$transmdl), cooks_distance_plot)
-            ggarrange(plotlist = CDplots,
-            labels = paste(out_info$pfasmdl$terms[[2]],
-                           out_info$pfasmdl$terms[[3]]))
-      }
-    }
-  }
-
-```
-
-
-```{r DFBETA plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/"}
-  
-  for (pfas in pfas.list) {
-  pfas.name <- pfas
-  for (pfas.trans in pfastrans.list) {
-    Tpfas.name <- pfas.trans 
-  for (fire.var in fire.list) {
-    fire.name <- fire.var
-  out_info <- change_plot_fxn(FireChange2, pfas, pfas.trans, fire.var)
+    out_info <- change_plot_fxn(FireChange2, pfas.name, Tpfas.name, fire.var)
   
    #DFBETA plots
-            fbeta1 <- fbetas_plot(out_info$pfasmdl)
-            fbeta2 <- fbetas_plot(out_info$transmdl)
+            fbeta1 <- fbetas_plot(out_info$pfasmdl, paste0(out_info$pfasmdl$terms[[2]], ": ",
+                                            out_info$pfasmdl$terms[[3]][2]))
+            fbeta2 <- fbetas_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
+                                            out_info$transmdl$terms[[3]][2]))
             FBplots <-  list(fbeta1$`(Intercept)`$plot, fbeta1$total.num.fireruns$plot,
                  fbeta1$EthnicityHispanic$plot, fbeta2$`(Intercept)`$plot,
                  fbeta2$total.num.fireruns$plot, fbeta2$EthnicityHispanic$plot)
-            ggarrange(plotlist = FBplots)
+            print(ggarrange(plotlist = FBplots))
   
        }
      }
