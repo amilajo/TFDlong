@@ -2061,17 +2061,17 @@ fbeta1 <- fbetas_plot(out_info$pfasmdl, paste0(out_info$pfasmdl$terms[[2]], ": "
 fbeta2 <- fbetas_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
                                                       out_info$transmdl$terms[[3]][2]))
 
-plotlist.a <- list(orig.resid, trans.resid, qq.plot.orig, qq.plot.trans, 
-                   cd.plot.orig, cd.plot.trans)
-plotlist.b <- list(fbeta1$`(Intercept)`$plot, 
-                   paste0("fbeta1$",out_info$pfasmdl$terms[[3]][[2]],"$plot", sep = ""), 
-                   fbeta1$EthnicityHispanic$plot, 
-                   fbeta2$`(Intercept)`$plot, 
-                   paste0("fbeta2$",out_info$transmdl$terms[[3]][[2]],"$plot", sep = ""),
-                   fbeta2$EthnicityHispanic$plot)
+beta.fire <- list(fbeta1[[2]][1]$plot, fbeta2[[2]][1]$plot)
 
-print(ggarrange(plotlist = plotlist.a, nrow = 5, ncol = 2))
-print(ggarrange(plotlist = plotlist.b, nrow = 4, ncol = 2))
+plotlist.a <- list(orig.resid, trans.resid, qq.plot.orig, qq.plot.trans, 
+                   cd.plot.orig$plot, cd.plot.trans$plot,
+                   fbeta1$`(Intercept)`$plot, fbeta2$`(Intercept)`$plot,
+                   fbeta1$EthnicityHispanic$plot, fbeta2$EthnicityHispanic$plot,
+                   fbeta1[[2]][1]$plot, fbeta2[[2]][1]$plot)
+
+
+
+print(ggarrange(plotlist = plotlist.a, nrow = 6, ncol = 2))
     
     
   }
@@ -2095,9 +2095,9 @@ for (i in 1:length(pfas.list)) {
     
     #Cooks distance plots
     CDplots <- sapply(list(out_info$pfasmdl, out_info$transmdl), cooks_distance_plot)
-    print(ggarrange(plotlist = CDplots,
-              labels = paste(out_info$pfasmdl$terms[[2]],
-                             out_info$pfasmdl$terms[[3]])))
+    print(ggarrange(plotlist = CDplots) +
+     labs(title = paste0(out_info$transmdl$terms[[2]], ": ",
+                          out_info$pfasmdl$terms[[3]][2])) 
   }
 }
 
