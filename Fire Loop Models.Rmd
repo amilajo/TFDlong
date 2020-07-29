@@ -1,7 +1,7 @@
 ---
 title: "TFD longitudinal analyses"
 author: "Amy Nematollahi and Julia Fisher"
-date: "7/16/2020"
+date: "7/27/2020"
 output:
   pdf_document: default
   word_document: default
@@ -438,7 +438,7 @@ cat(noquote(lod.string.final4))
 
 \end{landscape}
 
-Should I remove subject 2009 (missing fire info) from FireTuk?
+<!-- Should I remove subject 2009 (missing fire info) from FireTuk? -->
 
 ```{r join TFDtuk to fire exposure data, results = F}
 
@@ -472,8 +472,8 @@ FireTuk <- TFDtuk %>%
 
 ```
 
-For the densities, include a color grouping for time (1 or 2).
-For the scatterplots, include lines between data points from the same person (to get a better understanding of slope).  This corresponds to a grouping for each participant ID.  We could include an additional grouping for ethnicity by gender if we want or a facet for ethnicity by gender.
+<!-- For the densities, include a color grouping for time (1 or 2).
+For the scatterplots, include lines between data points from the same person (to get a better understanding of slope).  This corresponds to a grouping for each participant ID.  We could include an additional grouping for ethnicity by gender if we want or a facet for ethnicity by gender. -->
 
 
 ```{r Table 1, results = 'asis', eval = F}
@@ -1235,7 +1235,7 @@ ggarrange(plotlist = plotliste, ncol = 3, nrow = 3)
 
 ```
 
-```{r nPFOA plots}
+```{r nPFOA plots, eval = F}
 
 ggplot(FireTuk, aes(x=days.since.struc.MRF)) + 
   geom_line(aes(y = SmPFOSorig), color = "darkred") + 
@@ -1415,7 +1415,27 @@ FireChange <- FireTuk %>%
   left_join(FireTuk %>% 
               filter(Status == 'RecruitRepeat') %>%
               dplyr::select(SubjectID, Status, Ethnicity, Gender, Age, BMI, time.since.baseline, days.since.MRF, str.duration,
-                            str.num.fireruns, days.since.struc.MRF, total.duration, total.num.fireruns, inter.term, ethn.gen), by = 'SubjectID') %>%
+                            str.num.fireruns, days.since.struc.MRF, total.duration, total.num.fireruns, inter.term, ethn.gen,
+                            PFOSAorig, nPFOAorig, nPFOSorig, PFDEAorig, PFHXSorig, PFNAorig, PFUAorig, SbPFOAorig, SmPFOSorig), 
+            by = 'SubjectID') %>%
+   rename(PFOSA.baseline = PFOSAorig.y,
+         nPFOA.baseline = nPFOAorig.y,
+         nPFOS.baseline = nPFOSorig.y,
+         PFDEA.baseline = PFDEAorig.y,
+         PFHXS.baseline = PFHXSorig.y,
+         PFNA.baseline = PFNAorig.y,
+         PFUA.baseline = PFUAorig.y,
+         SbPFOA.baseline = SbPFOAorig.y,
+         SmPFOS.baseline = SmPFOSorig.y) %>%
+   rename(PFOSAorig = PFOSAorig.x,
+         nPFOAorig = nPFOAorig.x,
+         nPFOSorig = nPFOSorig.x,
+         PFDEAorig = PFDEAorig.x,
+         PFHXSorig = PFHXSorig.x,
+         PFNAorig = PFNAorig.x,
+         PFUAorig = PFUAorig.x,
+         SbPFOAorig = SbPFOAorig.x,
+         SmPFOSorig = SmPFOSorig.x) %>%
   mutate(Ethnicity = factor(as.character(Ethnicity), levels = c('Non-hispanic', 'Hispanic'))) %>%
   
   #  mutate(PFOSAtrans = PFOSAorig + abs(min(.$PFOSAorig)) + 1, 
@@ -1719,7 +1739,7 @@ true.mean <- mean.change %>%
 
 ```
 
-```{r models for change in levels NEW, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
+```{r models for change in levels NEW, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
 
 # For each PFAS create separate models for:
 # total structural number fire runs
@@ -1957,7 +1977,7 @@ fbetas_plot <- function(mdl, st, t = 'one') { #added subtitle (st) for printing 
 
 ```
 
-```{r change function, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+```{r change function, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2056,6 +2076,7 @@ cd.plot.trans <- cooks_distance_plot(out_info$transmdl, paste0(out_info$transmdl
                                                                out_info$transmdl$terms[[3]][2]))
 
 #DFBETA plots
+
 fbeta1 <- fbetas_plot(out_info$pfasmdl, paste0(out_info$pfasmdl$terms[[2]], ": ",
                                                      out_info$pfasmdl$terms[[3]][2]))
 fbeta2 <- fbetas_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
@@ -2080,644 +2101,1249 @@ print(ggarrange(plotlist = plotlist.a, nrow = 6, ncol = 2))
 
 ```
 
-add CD plots and DFBETA plots to forloop above to keep all relevant mdls together
+```{r check PFOSA models with outliers removed, results = "asis", fig.width = 8, fig.height = 11}
+
+#PFOSA: total.duration.hrs
+model_PFOSA <- lm(PFOSAorig ~  total.duration.hrs + Ethnicity, data = FireChange2)
+model_PFOSA.rm <- lm(PFOSAorig ~  total.duration.hrs + Ethnicity, data = FireChange2 %>% 
+                       .[-33, ])
+
+PFOSA.resid<- ggplot(data.frame(resid = resid(model_PFOSA), 
+                                 fitted = fitted(model_PFOSA)), 
+                                aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFOSAorig: total duration of fireruns (hrs)")
+PFOSA.resid.rm <- ggplot(data.frame(resid = resid(model_PFOSA.rm), 
+                                     fitted = fitted(model_PFOSA.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-33, ]")
+
+plotlist.PFOSA <- list(PFOSA.resid, PFOSA.resid.rm)
+print(ggarrange(plotlist = plotlist.PFOSA, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFOSA, model_PFOSA.rm, title = "PFOSA: total duration of fireruns (hours) - Change Score Models 
+          - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFOSA: days.since.MRF
+model_PFOSA2 <- lm(PFOSAorig ~  days.since.MRF + Ethnicity, data = FireChange2)
+model_PFOSA2.rm <- lm(PFOSAorig ~  days.since.MRF + Ethnicity, data = FireChange2 %>% 
+                       .[-33, ] %>%
+                       .[-25, ])
+
+PFOSA.resid2<- ggplot(data.frame(resid = resid(model_PFOSA2), 
+                                 fitted = fitted(model_PFOSA2)), 
+                                aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFOSAorig: days since most recent fire")
+PFOSA.resid2.rm <- ggplot(data.frame(resid = resid(model_PFOSA2.rm), 
+                                     fitted = fitted(model_PFOSA2.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-33, ], [-25, ]")
+
+plotlist.PFOSA2 <- list(PFOSA.resid2, PFOSA.resid2.rm)
+print(ggarrange(plotlist = plotlist.PFOSA2, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFOSA2, model_PFOSA2.rm, title = "PFOSA: days since most recent fire - Change Score Models 
+          - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFOSA: days.since.struc.MRF
+model_PFOSA3 <- lm(PFOSAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2)
+model_PFOSA3.rm <- lm(PFOSAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2 %>% 
+                       .[-33, ] %>%
+                       .[-25, ])
+
+PFOSA.resid3<- ggplot(data.frame(resid = resid(model_PFOSA3), 
+                                 fitted = fitted(model_PFOSA3)), 
+                                aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFOSAorig: days since most recent structural fire")
+PFOSA.resid3.rm <- ggplot(data.frame(resid = resid(model_PFOSA3.rm), 
+                                     fitted = fitted(model_PFOSA3.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-33, ], [-25, ]")
+
+plotlist.PFOSA3 <- list(PFOSA.resid3, PFOSA.resid3.rm)
+print(ggarrange(plotlist = plotlist.PFOSA3, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFOSA3, model_PFOSA3.rm, title = "PFOSA: days since most recent structural fire - Change Score Models 
+          - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFOSA: time.since.baseline
+model_PFOSA4 <- lm(PFOSAorig ~  time.since.baseline + Ethnicity, data = FireChange2)
+model_PFOSA4.rm <- lm(PFOSAorig ~  time.since.baseline + Ethnicity, data = FireChange2 %>% 
+                       .[-33, ] %>%
+                       .[-25, ])
+
+PFOSA.resid4<- ggplot(data.frame(resid = resid(model_PFOSA4), 
+                                 fitted = fitted(model_PFOSA4)), 
+                                aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFOSAorig: time since baseline (days)")
+PFOSA.resid4.rm <- ggplot(data.frame(resid = resid(model_PFOSA4.rm), 
+                                     fitted = fitted(model_PFOSA4.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-33, ], [-25, ]")
+
+plotlist.PFOSA4 <- list(PFOSA.resid4, PFOSA.resid4.rm)
+print(ggarrange(plotlist = plotlist.PFOSA4, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFOSA4, model_PFOSA4.rm, title = "PFOSA: time since baseline (days) - Change Score Models 
+          - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+```
+
+```{r check nPFOA models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11}
+
+#nPFOA: total.num.fireruns 
+model_nPFOA <- lm(nPFOAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2)
+model_nPFOA.rm <- lm(nPFOAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2 %>%
+                       .[-40, ] %>%
+                       .[-4, ])
+
+nPFOA.resid<- ggplot(data.frame(resid = resid(model_nPFOA), 
+                                fitted = fitted(model_nPFOA)), 
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOAorig: total number of fireruns")
+nPFOA.resid.rm <- ggplot(data.frame(resid = resid(model_nPFOA.rm), 
+                                    fitted = fitted(model_nPFOA.rm)), 
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-4, ], [-40, ]")
+
+plotlist.nPFOA1 <- list(nPFOA.resid, nPFOA.resid.rm)
+print(ggarrange(plotlist = plotlist.nPFOA1, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_nPFOA, model_nPFOA.rm, title = "nPFOA: Total number of fireruns - Change Score Models 
+          - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#nPFOA: str.num.fireruns
+model_nPFOA2 <- lm(nPFOAorig ~  str.num.fireruns + Ethnicity, data = FireChange2)
+model_nPFOA2.rm <- lm(nPFOAorig ~  str.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                        .[-40, ])
+
+nPFOA.resid2<- ggplot(data.frame(resid = resid(model_nPFOA2), 
+                                 fitted = fitted(model_nPFOA2)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOAorig: total number of structural fireruns")
+nPFOA.resid2.rm <- ggplot(data.frame(resid = resid(model_nPFOA2.rm), 
+                                    fitted = fitted(model_nPFOA2.rm)), 
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-40, ]")
+
+plotlist.nPFOA2 <- list(nPFOA.resid2, nPFOA.resid2.rm)
+print(ggarrange(plotlist = plotlist.nPFOA2, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_nPFOA2, model_nPFOA2.rm, title = "nPFOA: Total number of structural fireruns - Change Score Models 
+          - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#nPFOA: total.duration.hrs
+model_nPFOA3 <- lm(nPFOAorig ~  total.duration.hrs + Ethnicity, data = FireChange2)
+model_nPFOA3.rm <- lm(nPFOAorig ~  total.duration.hrs + Ethnicity, data = FireChange2 %>% .[-40, ])
+# summary(model_nPFOA3)
+# summary(model_nPFOA3.rm)
+# plot(resid(model_nPFOA3) ~ fitted(model_nPFOA3))
+# abline(h = 0)
+# plot(resid(model_nPFOA3.rm) ~ fitted(model_nPFOA3.rm))
+# abline(h=0)
+
+nPFOA.resid3<- ggplot(data.frame(resid = resid(model_nPFOA3), 
+                                 fitted = fitted(model_nPFOA3)), 
+                                aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOAorig: total duration of fireruns (hours)")
+nPFOA.resid3.rm <- ggplot(data.frame(resid = resid(model_nPFOA3.rm), 
+                                     fitted = fitted(model_nPFOA3.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-40, ]")
+
+plotlist.nPFOA3 <- list(nPFOA.resid3, nPFOA.resid3.rm)
+print(ggarrange(plotlist = plotlist.nPFOA3, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_nPFOA3, model_nPFOA3.rm, title = "nPFOA: total duration of fireruns (hours) - Change Score Models 
+          - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#nPFOA: str.duration.hrs
+model_nPFOA4 <- lm(nPFOAorig ~  str.duration.hrs + Ethnicity, data = FireChange2)
+model_nPFOA4.rm <- lm(nPFOAorig ~  str.duration.hrs + Ethnicity, data = FireChange2 %>% .[-40, ])
+
+nPFOA.resid4<- ggplot(data.frame(resid = resid(model_nPFOA4), 
+                                 fitted = fitted(model_nPFOA4)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOAorig: total duration of structural fireruns (hours)")
+nPFOA.resid4.rm <- ggplot(data.frame(resid = resid(model_nPFOA4.rm), 
+                                     fitted = fitted(model_nPFOA4.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-40, ]")
+
+plotlist.nPFOA4 <- list(nPFOA.resid4, nPFOA.resid4.rm)
+print(ggarrange(plotlist = plotlist.nPFOA4, nrow = 2, ncol = 2))
+
+stargazer(model_nPFOA4, model_nPFOA4.rm, title = "nPFOA: total duration of structural fireruns (hours) 
+          - Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+
+#nPFOA: days.since.MRF
+model_nPFOA5 <- lm(nPFOAorig ~  days.since.MRF + Ethnicity, data = FireChange2)
+model_nPFOA5.rm <- lm(nPFOAorig ~  days.since.MRF + Ethnicity, data = FireChange2 %>% .[-40, ])
+
+nPFOA.resid5<- ggplot(data.frame(resid = resid(model_nPFOA5), 
+                                 fitted = fitted(model_nPFOA5)), 
+                            aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOAorig: days since most recent fire")
+nPFOA.resid5.rm <- ggplot(data.frame(resid = resid(model_nPFOA5.rm), 
+                                     fitted = fitted(model_nPFOA5.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-40, ]")
+
+plotlist.nPFOA5 <- list(nPFOA.resid5, nPFOA.resid5.rm)
+print(ggarrange(plotlist = plotlist.nPFOA5, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_nPFOA5, model_nPFOA5.rm, title = "nPFOA: days since most recent fire - Change Score Models - 1)
+          original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#nPFOA: days.since.struc.MRF
+model_nPFOA6 <- lm(nPFOAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2)
+model_nPFOA6.rm <- lm(nPFOAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2 %>% .[-40, ])
+
+nPFOA.resid6<- ggplot(data.frame(resid = resid(model_nPFOA6), 
+                                 fitted = fitted(model_nPFOA6)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOAorig: days since most recent structural fire")
+nPFOA.resid6.rm <- ggplot(data.frame(resid = resid(model_nPFOA6.rm), 
+                                     fitted = fitted(model_nPFOA6.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-40, ]")
+
+plotlist.nPFOA6 <- list(nPFOA.resid6, nPFOA.resid6.rm)
+print(ggarrange(plotlist = plotlist.nPFOA6, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_nPFOA6, model_nPFOA6.rm, title = "nPFOA: days since most recent structural fire - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#nPFOA: time.since.baseline
+model_nPFOA7 <- lm(nPFOAorig ~  time.since.baseline + Ethnicity, data = FireChange2)
+model_nPFOA7.rm <- lm(nPFOAorig ~  time.since.baseline + Ethnicity, data = FireChange2 %>%
+                        .[-40, ] %>%
+                        .[-4, ])
+
+nPFOA.resid7<- ggplot(data.frame(resid = resid(model_nPFOA7), 
+                                 fitted = fitted(model_nPFOA7)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOAorig: time since baseline (days)")
+nPFOA.resid7.rm <- ggplot(data.frame(resid = resid(model_nPFOA7.rm), 
+                                     fitted = fitted(model_nPFOA7.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-40, ], [-4, ]")
+
+plotlist.nPFOA7 <- list(nPFOA.resid7, nPFOA.resid7.rm)
+print(ggarrange(plotlist = plotlist.nPFOA7, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_nPFOA7, model_nPFOA7.rm, title = "nPFOA: time since baseline (days) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+```
+
+```{r check nPFOS models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11}
+
+
+#nPFOS: total.duration.hrs
+model_nPFOS <- lm(nPFOSorig ~  total.duration.hrs + Ethnicity, data = FireChange2)
+model_nPFOS.rm <- lm(nPFOSorig ~  total.duration.hrs + Ethnicity, data = FireChange2 %>% 
+                       .[-23, ] %>%
+                       .[-31, ])
+
+nPFOS.resid<- ggplot(data.frame(resid = resid(model_nPFOS), 
+                                fitted = fitted(model_nPFOS)), 
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "nPFOSorig: total duration of fireruns (hours)")
+nPFOS.resid.rm <- ggplot(data.frame(resid = resid(model_nPFOS.rm), 
+                                    fitted = fitted(model_nPFOS.rm)), 
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-23, ], [-31, ]")
+
+plotlist.nPFOS <- list(nPFOS.resid, nPFOS.resid.rm)
+print(ggarrange(plotlist = plotlist.nPFOS, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_nPFOS, model_nPFOS.rm, title = "nPFOS: total duration of fireruns (hours) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+
+```
+
+```{r check PFDEA models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11}
+
+
+#PFDEA: total.duration.hrs
+model_PFDEA <- lm(PFDEAorig ~  total.duration.hrs + Ethnicity, data = FireChange2)
+model_PFDEA.rm <- lm(PFDEAorig ~  total.duration.hrs + Ethnicity, data = FireChange2 %>% .[-23, ])
+
+PFDEA.resid<- ggplot(data.frame(resid = resid(model_PFDEA), 
+                                fitted = fitted(model_PFDEA)), 
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFDEAorig: total duration of fireruns (hours)")
+PFDEA.resid.rm <- ggplot(data.frame(resid = resid(model_PFDEA.rm), 
+                                    fitted = fitted(model_PFDEA.rm)), 
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-23, ]")
+
+plotlist.PFDEA <- list(PFDEA.resid, PFDEA.resid.rm)
+print(ggarrange(plotlist = plotlist.PFDEA, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFDEA, model_PFDEA.rm, title = "PFDEA: total duration of fireruns (hours) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFDEA: str.duration.hrs
+model_PFDEA2 <- lm(PFDEAorig ~  str.duration.hrs + Ethnicity, data = FireChange2)
+model_PFDEA2.rm <- lm(PFDEAorig ~  str.duration.hrs + Ethnicity, data = FireChange2 %>% 
+                        .[-3, ])
+
+PFDEA.resid2<- ggplot(data.frame(resid = resid(model_PFDEA2), 
+                                 fitted = fitted(model_PFDEA2)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFDEAorig: total duration of structural fireruns (hours)")
+PFDEA.resid2.rm <- ggplot(data.frame(resid = resid(model_PFDEA2.rm), 
+                                     fitted = fitted(model_PFDEA2.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-3, ]")
+
+plotlist.PFDEA2 <- list(PFDEA.resid2, PFDEA.resid2.rm)
+print(ggarrange(plotlist = plotlist.PFDEA2, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFDEA2, model_PFDEA2.rm, title = "PFDEA: total duration of structural fireruns (hours) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+```
+
+```{r check PFHXS models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11}
+
+#PFHXS: total.num.fireruns
+model_PFHXS <- lm(PFHXSorig ~  total.num.fireruns + Ethnicity, data = FireChange2)
+model_PFHXS.rm <- lm(PFHXSorig ~  total.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                       .[-31, ] %>%
+                       .[-4, ] %>% 
+                       .[-40, ])
+
+PFHXS.resid<- ggplot(data.frame(resid = resid(model_PFHXS), 
+                                fitted = fitted(model_PFHXS)), 
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFHXSorig: total number of fireruns")
+PFHXS.resid.rm <- ggplot(data.frame(resid = resid(model_PFHXS.rm), 
+                                    fitted = fitted(model_PFHXS.rm)), 
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ], [-4, ], [-40, ]")
+
+plotlist.PFHXS <- list(PFHXS.resid, PFHXS.resid.rm)
+print(ggarrange(plotlist = plotlist.PFHXS, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFHXS, model_PFHXS.rm, title = "PFHXS: total number of fireruns - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFHXS: str.num.fireruns
+model_PFHXS2 <- lm(PFHXSorig ~  str.num.fireruns + Ethnicity, data = FireChange2)
+model_PFHXS2.rm <- lm(PFHXSorig ~  str.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                        .[-31, ] %>%
+                        .[-4, ] %>% 
+                        .[-40, ])
+
+PFHXS.resid2<- ggplot(data.frame(resid = resid(model_PFHXS2), 
+                                 fitted = fitted(model_PFHXS2)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFHXSorig: total number of structural fireruns")
+PFHXS.resid2.rm <- ggplot(data.frame(resid = resid(model_PFHXS2.rm), 
+                                     fitted = fitted(model_PFHXS2.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ], [-4, ], [-40, ]")
+
+plotlist.PFHXS2 <- list(PFHXS.resid2, PFHXS.resid2.rm)
+print(ggarrange(plotlist = plotlist.PFHXS2, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFHXS2, model_PFHXS2.rm, title = "PFHXS: total number of structural fireruns - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFHXS: total.duration.hrs
+model_PFHXS3 <- lm(PFHXSorig ~  total.duration.hrs + Ethnicity, data = FireChange2)
+model_PFHXS3.rm <- lm(PFHXSorig ~  total.duration.hrs + Ethnicity, data = FireChange2 %>% 
+                        .[-23, ])
+
+PFHXS.resid3<- ggplot(data.frame(resid = resid(model_PFHXS3), 
+                                 fitted = fitted(model_PFHXS3)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFHXSorig: total duration of fireruns (hours)")
+PFHXS.resid3.rm <- ggplot(data.frame(resid = resid(model_PFHXS3.rm), 
+                                     fitted = fitted(model_PFHXS3.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-23, ]")
+
+plotlist.PFHXS3 <- list(PFHXS.resid3, PFHXS.resid3.rm)
+print(ggarrange(plotlist = plotlist.PFHXS3, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFHXS3, model_PFHXS3.rm, title = "PFHXS: total duration of fireruns (hours) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFHXS: str.duration.hrs
+model_PFHXS4 <- lm(PFHXSorig ~  str.duration.hrs + Ethnicity, data = FireChange2)
+model_PFHXS4.rm <- lm(PFHXSorig ~  str.duration.hrs + Ethnicity, data = FireChange2 %>% 
+                        .[-31, ])
+
+PFHXS.resid4<- ggplot(data.frame(resid = resid(model_PFHXS4), 
+                                 fitted = fitted(model_PFHXS4)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFHXSorig: total duration of structural fireruns (hours)")
+PFHXS.resid4.rm <- ggplot(data.frame(resid = resid(model_PFHXS4.rm), 
+                                     fitted = fitted(model_PFHXS4.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ]")
+
+plotlist.PFHXS4 <- list(PFHXS.resid4, PFHXS.resid4.rm)
+print(ggarrange(plotlist = plotlist.PFHXS4, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFHXS4, model_PFHXS4.rm, title = "PFHXS: total duration of structural fireruns (hours) -
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+#PFHXS: days.since.MRF
+model_PFHXS5 <- lm(PFHXSorig ~  days.since.MRF + Ethnicity, data = FireChange2)
+model_PFHXS5.rm <- lm(PFHXSorig ~  days.since.MRF + Ethnicity, data = FireChange2 %>% 
+                        .[-31, ] %>%
+                        .[-40])
+
+PFHXS.resid5<- ggplot(data.frame(resid = resid(model_PFHXS5), 
+                                 fitted = fitted(model_PFHXS5)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFHXSorig: days since most recent fire")
+PFHXS.resid5.rm <- ggplot(data.frame(resid = resid(model_PFHXS5.rm), 
+                                     fitted = fitted(model_PFHXS5.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ], [-40, ]")
+
+plotlist.PFHXS5<- list(PFHXS.resid5, PFHXS.resid5.rm)
+print(ggarrange(plotlist = plotlist.PFHXS5, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFHXS5, model_PFHXS5.rm, title = "PFHXS: days since most recent fire - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+#PFHXS: days.since.struc.MRF
+model_PFHXS6 <- lm(PFHXSorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2)
+model_PFHXS6.rm <- lm(PFHXSorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2 %>% 
+                        .[-31, ] %>%
+                        .[-40])
+
+PFHXS.resid6<- ggplot(data.frame(resid = resid(model_PFHXS6), 
+                                 fitted = fitted(model_PFHXS6)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFHXSorig: days since most recent structural fire")
+PFHXS.resid6.rm <- ggplot(data.frame(resid = resid(model_PFHXS6.rm), 
+                                     fitted = fitted(model_PFHXS6.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ], [-40, ]")
+
+plotlist.PFHXS6<- list(PFHXS.resid6, PFHXS.resid6.rm)
+print(ggarrange(plotlist = plotlist.PFHXS6, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFHXS6, model_PFHXS6.rm, title = "PFHXS: days since most recent structural fire - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFHXS: time.since.baseline
+model_PFHXS7 <- lm(PFHXSorig ~   time.since.baseline + Ethnicity, data = FireChange2)
+model_PFHXS7.rm <- lm(PFHXSorig ~   time.since.baseline + Ethnicity, data = FireChange2 %>% 
+                        .[-31, ])
+
+PFHXS.resid7<- ggplot(data.frame(resid = resid(model_PFHXS7), 
+                                 fitted = fitted(model_PFHXS7)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFHXSorig: time since baseline (days)")
+PFHXS.resid7.rm <- ggplot(data.frame(resid = resid(model_PFHXS7.rm), 
+                                     fitted = fitted(model_PFHXS7.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ], [-40, ]")
+
+plotlist.PFHXS7<- list(PFHXS.resid7, PFHXS.resid7.rm)
+print(ggarrange(plotlist = plotlist.PFHXS7, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFHXS7, model_PFHXS7.rm, title = "PFHXS: time since baseline (days) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+
+
+```
+
+```{r check PFNA models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11}
+
+
+#PFNA: total.num.fireruns
+model_PFNA <- lm(PFNAorig ~  total.num.fireruns + Ethnicity, data = FireChange2)
+model_PFNA.rm <- lm(PFNAorig ~  total.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                      .[-6, ])
+
+PFNA.resid<- ggplot(data.frame(resid = resid(model_PFNA), 
+                               fitted = fitted(model_PFNA)), 
+                    aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFNAorig: total number of fireruns")
+PFNA.resid.rm <- ggplot(data.frame(resid = resid(model_PFNA.rm), 
+                                   fitted = fitted(model_PFNA.rm)), 
+                        aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-6, ]")
+
+plotlist.PFNA <- list(PFNA.resid, PFNA.resid.rm)
+print(ggarrange(plotlist = plotlist.PFNA, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFNA, model_PFNA.rm, title = "PFNA: total number of fireruns - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFNA: str.num.fireruns
+model_PFNA2 <- lm(PFNAorig ~  str.num.fireruns + Ethnicity, data = FireChange2)
+model_PFNA2.rm <- lm(PFNAorig ~  str.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                       .[-6, ])
+
+PFNA.resid2<- ggplot(data.frame(resid = resid(model_PFNA2), 
+                                fitted = fitted(model_PFNA2)), 
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFNAorig: total number of structural fireruns")
+PFNA.resid2.rm <- ggplot(data.frame(resid = resid(model_PFNA2.rm), 
+                                    fitted = fitted(model_PFNA2.rm)), 
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-6, ]")
+
+plotlist.PFNA2 <- list(PFNA.resid2, PFNA.resid2.rm)
+print(ggarrange(plotlist = plotlist.PFNA2, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFNA2, model_PFNA2.rm, title = "PFNA: total number of structural fireruns - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+#PFNA: total.duration.hrs
+model_PFNA3 <- lm(PFNAorig ~  total.duration.hrs + Ethnicity, data = FireChange2)
+model_PFNA3.rm <- lm(PFNAorig ~  total.duration.hrs + Ethnicity, data = FireChange2 %>% 
+                       .[-6, ])
+
+PFNA.resid3<- ggplot(data.frame(resid = resid(model_PFNA3), 
+                                fitted = fitted(model_PFNA3)), 
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "PFNAorig: total fireruns duration (hours)")
+PFNA.resid3.rm <- ggplot(data.frame(resid = resid(model_PFNA3.rm), 
+                                    fitted = fitted(model_PFNA3.rm)), 
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-6, ]")
+
+plotlist.PFNA3 <- list(PFNA.resid3, PFNA.resid3.rm)
+print(ggarrange(plotlist = plotlist.PFNA3, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFNA3, model_PFNA3.rm, title = "PFNA: total fireruns duration (hours) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFNA: days.since.MRF
+model_PFNA4 <- lm(PFNAorig ~  days.since.MRF + Ethnicity, data = FireChange2)
+model_PFNA4.rm <- lm(PFNAorig ~  days.since.MRF + Ethnicity, data = FireChange2 %>%
+                       .[-6, ])
+
+PFNA.resid4<- ggplot(data.frame(resid = resid(model_PFNA4),
+                                fitted = fitted(model_PFNA4)),
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "PFNAorig: days since most recent fire")
+PFNA.resid4.rm <- ggplot(data.frame(resid = resid(model_PFNA4.rm),
+                                    fitted = fitted(model_PFNA4.rm)),
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-6, ]")
+
+plotlist.PFNA4 <- list(PFNA.resid4, PFNA.resid4.rm)
+print(ggarrange(plotlist = plotlist.PFNA4, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFNA4, model_PFNA4.rm, title = "PFNA: days since most recent fire -
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFNA: days.since.struc.MRF
+model_PFNA5 <- lm(PFNAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2)
+model_PFNA5.rm <- lm(PFNAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2 %>%
+                       .[-6, ])
+
+PFNA.resid5<- ggplot(data.frame(resid = resid(model_PFNA5),
+                                fitted = fitted(model_PFNA5)),
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "PFNAorig: days since most recent structural fire")
+PFNA.resid5.rm <- ggplot(data.frame(resid = resid(model_PFNA5.rm),
+                                    fitted = fitted(model_PFNA5.rm)),
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-6, ]")
+
+plotlist.PFNA5 <- list(PFNA.resid5, PFNA.resid5.rm)
+print(ggarrange(plotlist = plotlist.PFNA5, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFNA5, model_PFNA5.rm, title = "PFNA: days since most recent structural fire -
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#PFNA: time.since.baseline
+model_PFNA6 <- lm(PFNAorig ~  time.since.baseline + Ethnicity, data = FireChange2)
+model_PFNA6.rm <- lm(PFNAorig ~  time.since.baseline+ Ethnicity, data = FireChange2 %>%
+                       .[-6, ])
+
+PFNA.resid6<- ggplot(data.frame(resid = resid(model_PFNA6),
+                                fitted = fitted(model_PFNA6)),
+                     aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "PFNAorig: time since baseline (days)")
+PFNA.resid6.rm <- ggplot(data.frame(resid = resid(model_PFNA6.rm),
+                                    fitted = fitted(model_PFNA6.rm)),
+                         aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-6, ]")
+
+plotlist.PFNA6 <- list(PFNA.resid6, PFNA.resid6.rm)
+print(ggarrange(plotlist = plotlist.PFNA6, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFNA6, model_PFNA6.rm, title = "PFNA: time since baseline (days) -
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+```
+
+```{r check PFUA models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11}
+
+#PFUA: total.num.fireruns
+model_PFUA <- lm(PFUAorig ~  total.num.fireruns + Ethnicity, data = FireChange2)
+model_PFUA.rm <- lm(PFUAorig ~  total.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                       .[-9, ])
+
+PFUA.resid<- ggplot(data.frame(resid = resid(model_PFUA), 
+                                   fitted = fitted(model_PFUA)), 
+                        aes(x = fitted, y = resid)) +
+      geom_point(size = 2) +
+      geom_hline(yintercept = 0) +
+      theme(axis.text = element_text(size = 10),
+            plot.title = element_text(hjust = 0.5)) +  
+      labs(title = "PFUAorig: total number of fireruns")
+    PFUA.resid.rm <- ggplot(data.frame(resid = resid(model_PFUA.rm), 
+                                     fitted = fitted(model_PFUA.rm)), 
+                          aes(x = fitted, y = resid)) +
+      geom_point(size = 2) +
+      geom_hline(yintercept = 0) +
+      theme(axis.text = element_text(size = 10),
+            plot.title = element_text(hjust = 0.5)) +
+      labs(title = "Outliers removed [-9, ]")
+
+plotlist.PFUA <- list(PFUA.resid, PFUA.resid.rm)
+print(ggarrange(plotlist = plotlist.PFUA, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_PFUA, model_PFUA.rm, title = "PFUA: total number of fireruns - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+```
+
+```{r check SbPFOA models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11}
+
+#SbPFOA: total.num.fireruns
+model_SbPFOA <- lm(SbPFOAorig ~  total.num.fireruns + Ethnicity, data = FireChange2)
+model_SbPFOA.rm <- lm(SbPFOAorig ~  total.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                        .[-31, ])
+
+SbPFOA.resid<- ggplot(data.frame(resid = resid(model_SbPFOA), 
+                                 fitted = fitted(model_SbPFOA)), 
+                      aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "SbPFOAorig: total number of fireruns")
+SbPFOA.resid.rm <- ggplot(data.frame(resid = resid(model_SbPFOA.rm), 
+                                     fitted = fitted(model_SbPFOA.rm)), 
+                          aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ]")
+
+plotlist.SbPFOA <- list(SbPFOA.resid, SbPFOA.resid.rm)
+print(ggarrange(plotlist = plotlist.SbPFOA, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_SbPFOA, model_SbPFOA.rm, title = "SbPFOA: total number of fireruns - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#SbPFOA: str.num.fireruns
+model_SbPFOA2 <- lm(SbPFOAorig ~  str.num.fireruns + Ethnicity, data = FireChange2)
+model_SbPFOA2.rm <- lm(SbPFOAorig ~  str.num.fireruns + Ethnicity, data = FireChange2 %>% 
+                         .[-31, ] %>%
+                         .[-11, ])
+
+SbPFOA2.resid<- ggplot(data.frame(resid = resid(model_SbPFOA2), 
+                                  fitted = fitted(model_SbPFOA2)), 
+                       aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "SbPFOAorig: total number of structural fireruns")
+SbPFOA.resid2.rm <- ggplot(data.frame(resid = resid(model_SbPFOA2.rm), 
+                                      fitted = fitted(model_SbPFOA2.rm)), 
+                           aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-31, ], [-11, ]")
+
+plotlist.SbPFOA2 <- list(SbPFOA2.resid, SbPFOA.resid2.rm)
+print(ggarrange(plotlist = plotlist.SbPFOA2, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_SbPFOA2, model_SbPFOA2.rm, title = "SbPFOA: total number of structural fireruns - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+#SbPFOA: days.since.MRF
+model_SbPFOA3 <- lm(SbPFOAorig ~  days.since.MRF + Ethnicity, data = FireChange2)
+model_SbPFOA3.rm <- lm(SbPFOAorig ~  days.since.MRF + Ethnicity, data = FireChange2 %>% 
+                         .[-11, ])
+
+SbPFOA3.resid<- ggplot(data.frame(resid = resid(model_SbPFOA3), 
+                                  fitted = fitted(model_SbPFOA3)), 
+                       aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "SbPFOAorig: days since most recent fire")
+SbPFOA.resid3.rm <- ggplot(data.frame(resid = resid(model_SbPFOA3.rm), 
+                                      fitted = fitted(model_SbPFOA3.rm)), 
+                           aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-11, ]")
+
+plotlist.SbPFOA3 <- list(SbPFOA3.resid, SbPFOA.resid3.rm)
+print(ggarrange(plotlist = plotlist.SbPFOA3, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_SbPFOA3, model_SbPFOA3.rm, title = "SbPFOA: days since most recent fire - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+#SbPFOA: days.since.struc.MRF
+model_SbPFOA4 <- lm(SbPFOAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2)
+model_SbPFOA4.rm <- lm(SbPFOAorig ~  days.since.struc.MRF + Ethnicity, data = FireChange2 %>% 
+                         .[-11, ])
+
+SbPFOA4.resid<- ggplot(data.frame(resid = resid(model_SbPFOA4), 
+                                  fitted = fitted(model_SbPFOA4)), 
+                       aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "SbPFOAorig: days since most recent structural fire")
+SbPFOA.resid4.rm <- ggplot(data.frame(resid = resid(model_SbPFOA4.rm), 
+                                      fitted = fitted(model_SbPFOA4.rm)), 
+                           aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-11, ]")
+
+plotlist.SbPFOA4 <- list(SbPFOA4.resid, SbPFOA.resid4.rm)
+print(ggarrange(plotlist = plotlist.SbPFOA4, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_SbPFOA4, model_SbPFOA4.rm, title = "SbPFOA: days since most recent structural fire - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+
+#SbPFOA: time.since.baseline
+model_SbPFOA5 <- lm(SbPFOAorig ~  time.since.baseline + Ethnicity, data = FireChange2)
+model_SbPFOA5.rm <- lm(SbPFOAorig ~  time.since.baseline + Ethnicity, data = FireChange2 %>%
+                         .[-11, ])
+
+SbPFOA5.resid<- ggplot(data.frame(resid = resid(model_SbPFOA5), 
+                                  fitted = fitted(model_SbPFOA5)), 
+                       aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +  
+  labs(title = "SbPFOAorig: time since baseline (days)")
+SbPFOA.resid5.rm <- ggplot(data.frame(resid = resid(model_SbPFOA5.rm), 
+                                      fitted = fitted(model_SbPFOA5.rm)), 
+                           aes(x = fitted, y = resid)) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0) +
+  theme(axis.text = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Outliers removed [-11, ]")
+
+plotlist.SbPFOA5 <- list(SbPFOA5.resid, SbPFOA.resid5.rm)
+print(ggarrange(plotlist = plotlist.SbPFOA5, nrow = 2, ncol = 2, font.label = list(size = 10)))
+
+stargazer(model_SbPFOA5, model_SbPFOA5.rm, title = "SbPFOA: time since baseline (days) - 
+          Change Score Models - 1) original and 2) outliers removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+
+```
+
+
+
+
+
+<!-- add CD plots and DFBETA plots to forloop above to keep all relevant mdls together
 interpret results
-Write function for sensitivity analyses
+Write function for sensitivity analyses -->
 
-```{r CD plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
+```{r prep baseline PFAS for sensitivity models, eval = F}
+
+#create new variables for:  
+#1) baseline PFAS 
+#2)tukey transformed baseline PFAS  (Julia's code from chunk "read_in_fire_change_debugging_Julia Tukey transformations")
+#Remove females
+
+base.PFAS <- FireChange %>%
+    mutate_at(vars(contains("orig")), funs(base = ifelse(Status ==  'Recruit', ., NA))) %>%
+    mutate(PFOSAtrans.tmp = PFOSAorig  + 11, # We will want to go back to min(.$PFOSAorig)
+         nPFOAtrans.tmp = nPFOAorig + 11,  #AN, after adding min(.$) to all: "Error in in shapiro.test(TRANS) : all 'x' values are identical
+         nPFOStrans.tmp = nPFOSorig + 11,
+         PFDEAtrans.tmp = PFDEAorig + 11,
+         PFHXStrans.tmp = PFHXSorig +  11,
+         PFNAtrans.tmp = PFNAorig + 11, 
+         PFUAtrans.tmp = PFUAorig + 11,
+         SbPFOAtrans.tmp = SbPFOAorig + 11,
+         SmPFOStrans.tmp = SmPFOSorig + 11) %>%
+  mutate(PFOSAtrans = transformTukey(PFOSAtrans.tmp, plotit = F, quiet = T),
+         nPFOAtrans = transformTukey(nPFOAtrans.tmp, plotit = F, quiet = T),
+         nPFOStrans = transformTukey(nPFOStrans.tmp, plotit = F, quiet = T),
+         PFDEAtrans = transformTukey(PFDEAtrans.tmp, plotit = F, quiet = T),
+         PFHXStrans = transformTukey(PFHXStrans.tmp, plotit = F, quiet = T),
+         PFNAtrans = transformTukey(PFNAtrans.tmp, plotit = F, quiet = T),
+         PFUAtrans = transformTukey(PFUAtrans.tmp, plotit = F, quiet = T),
+         SbPFOAtrans = transformTukey(SbPFOAtrans.tmp, plotit = F, quiet = T),
+         SmPFOStrans = transformTukey(SmPFOStrans.tmp, plotit = F, quiet = T)) %>%
+  mutate_at(vars(contains("trans")), funs(base = ifelse(Status ==  'Recruit', ., NA))) %>%
+    mutate(str.duration.hrs = str.duration/60,
+         total.duration.hrs = total.duration/60) %>%
+  filter(Gender == "Male") 
+
+# Note this for defining your lambdas if we use them again.
+PFOSAlambda <- as.numeric(transformTukey(base.PFAS$PFOSAtrans.tmp, plotit = F, quiet = T, returnLambda = T)) 
+nPFOAlambda <- as.numeric(transformTukey(base.PFAS$nPFOAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+nPFOSlambda <- as.numeric(transformTukey(base.PFAS$nPFOStrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFDEAlambda <- as.numeric(transformTukey(base.PFAS$PFDEAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFHXSlambda <- as.numeric(transformTukey(base.PFAS$PFHXStrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFNAlambda <- as.numeric(transformTukey(base.PFAS$PFNAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+PFUAlambda <- as.numeric(transformTukey(base.PFAS$PFUAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+SbPFOAlambda <- as.numeric(transformTukey(base.PFAS$SbPFOAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
+SmPFOSlambda <- as.numeric(transformTukey(base.PFAS$SmPFOStrans.tmp, plotit = F, quiet = T, returnLambda = T))
+
+# #check that base variable and orig variable are identical
+# base.check <- base.PFAS %>%
+#   filter(Status == 'Recruit') #identical checks TRUE for all
+
+                                
 
 
-for (i in 1:length(pfas.list)) {
-  pfas.name <- pfas.list[i]
-  Tpfas.name <- pfastrans.list[i]
-  for (fire.var in fire.list) {
-    out_info <- change_plot_fxn(FireChange2, pfas.name, Tpfas.name, fire.var)
-    
-    #Cooks distance plots
-    CDplots <- sapply(list(out_info$pfasmdl, out_info$transmdl), cooks_distance_plot)
-    print(ggarrange(plotlist = CDplots) +
-     labs(title = paste0(out_info$transmdl$terms[[2]], ": ",
-                          out_info$pfasmdl$terms[[3]][2])) 
-  }
+```
+
+
+```{r Sensitivity model functions, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
+
+#Sensitivity models for each PFAS/fire exposure combination: baseline PFAS measurement
+#Sensitivity models for each PFAS/fire exposure combination: age and BMI
+
+sens_ageBMI_fxn <- function(df, pfas, pfas.trans, fire.var) {
+  pfas_orig <- paste0("pfasmdl <- lm(", pfas, " ~ ", fire.var, " + Ethnicity + Age + BMI, data = df)")
+  eval(parse(text = pfas_orig))
+  pfas_trans <- paste0("transmdl <- lm(", pfas.trans, " ~ ", fire.var, " + Ethnicity + Age + BMI, data = df)")
+  eval(parse(text = pfas_trans))
+  out <- list(pfasmdl = pfasmdl,
+              transmdl = transmdl)
 }
 
+
 ```
 
 
-```{r DFBETA plots, results = 'asis', echo = T, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
-  
-for (i in 1:length(pfas.list)) {
-  pfas.name <- pfas.list[i]
-  Tpfas.name <- pfastrans.list[i]
-  for (fire.var in fire.list) {
-    out_info <- change_plot_fxn(FireChange2, pfas.name, Tpfas.name, fire.var)
-  
-   #DFBETA plots
-            fbeta1 <- fbetas_plot(out_info$pfasmdl, paste0(out_info$pfasmdl$terms[[2]], ": ",
-                                            out_info$pfasmdl$terms[[3]][2]))
-            fbeta2 <- fbetas_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
-                                            out_info$transmdl$terms[[3]][2]))
-            FBplots <-  list(fbeta1$`(Intercept)`$plot, fbeta1$total.num.fireruns$plot,
-                 fbeta1$EthnicityHispanic$plot, fbeta2$`(Intercept)`$plot,
-                 fbeta2$total.num.fireruns$plot, fbeta2$EthnicityHispanic$plot)
-            print(ggarrange(plotlist = FBplots))
-  
-       }
-     }
+```{r baseline PFAS sensitivity model loop, results = "asis", eval = F}
+
+#assuming we won't use time sine baseline, days since MRF, or days since structural MRF since our outcome variable is baseline PFAS
+
+
+base_PFAS_fxn <-  function(dta, orig_outcome, trans_outcome, orig_base, exp_outcome) {
+  orig_base_statement <- paste0("model_orig <- lm(", orig_outcome,
+                                 " ~ ", exp_outcome, " + ", orig_base, " + Ethnicity, data = dta)")
+  eval(parse(text = orig_base_statement))
+  trans_base_statement <- paste0("model_trans <- lm(", trans_outcome, 
+                                 " ~ ", exp_outcome, " + ", orig_base, " + Ethnicity, data = dta)")
+  eval(parse(text = trans_base_statement))
+  out <- list(model_orig = model_orig, 
+              model_trans = model_trans)
+}
+
+analytes <- c("PFOSA", "nPFOA", "nPFOS", "PFDEA", "PFHXS", "PFNA", "PFUA", "SbPFOA", "SmPFOS")
+exposures <- c("total.num.fireruns", "str.num.fireruns", "total.duration.hrs", "str.duration.hrs",
+               "days.since.MRF", "days.since.struc.MRF", "time.since.baseline")
+model_list <- list()
+mean.change <- data.frame(Ethnicity = as.character(),
+                          emmean = as.numeric(),
+                          lower.CL = as.numeric(),
+                          upper.CL = as.numeric(),
+                          exposure = as.character(), 
+                          analyte = as.character(),
+                          stringsAsFactors = FALSE)
+
+
+for (analyte in analytes) {
+  model_list[[analyte]] <- list() 
+  for (exposure in exposures) {
+  orig_var <- paste0(analyte, "orig")
+  trans_var <- paste0(analyte, "trans")
+  orig_base <- paste0(analyte, ".baseline")
+  out_info <- base_PFAS_fxn(FireChange, orig_var, trans_var, orig_base, exposure)
+  model_list[[analyte]][[exposure]] <- out_info
+  ggarrange(plot(resid(out_info$model_orig) ~ fitted(out_info$model_orig)) + abline(h = 0),
+            plot(resid(out_info$model_trans) ~ fitted(out_info$model_trans)) + abline(h = 0),
+            qqnorm(resid(out_info$model_orig)),
+            qqnorm(resid(out_info$model_trans)),
+            nrow = 2, ncol = 2)
+  stargazer(out_info$model_orig, out_info$model_trans)
   }
 
-```
+                        
+  stargazer(model_list[[analyte]][[exposures[1]]]$model_orig, 
+            model_list[[analyte]][[exposures[2]]]$model_orig,
+            model_list[[analyte]][[exposures[3]]]$model_orig,
+            model_list[[analyte]][[exposures[4]]]$model_orig,
+            title = "PFAS Change Score Model Results (No Transformation)", 
+            single.row = FALSE, header = FALSE,
+            omit.stat = c("f", "ser"), report = "vctp*", 
+            intercept.bottom = FALSE, intercept.top = TRUE,
+            digits = 3, font.size = "scriptsize")
+  stargazer(model_list[[analyte]][[exposures[5]]]$model_orig,
+            model_list[[analyte]][[exposures[6]]]$model_orig,
+            model_list[[analyte]][[exposures[7]]]$model_orig,
+            title = "PFAS Change Score Model Results (No Transformation)", 
+            single.row = FALSE, header = FALSE,
+            omit.stat = c("f", "ser"), report = "vctp*", 
+            intercept.bottom = FALSE, intercept.top = TRUE,
+            digits = 3, font.size = "scriptsize")
+}
 
 
-
-
-```{R change score residuals - total.num.fireruns, results = 'asis', dpi = 300, fig.width = 8, fig.height = 11, eval = F}
-
-
-
-#nPFOA ~ fireruns
-nPFOAmdl <- lm(nPFOAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-nPFOA.fireruns <- ggplot(data.frame(resid = resid(nPFOAmdl), fitted = fitted(nPFOAmdl)), 
-                          aes(x = fitted, y = resid)) +
-                          geom_point(size = 2) +
-                          geom_hline(yintercept = 0) +
-                          theme(axis.text = element_text(size = 15))
-nPFOAmdl2 <- lm(nPFOAorig ~ total.num.fireruns + Ethnicity, data = FireChange2 %>%
-                  filter(nPFOAorig > -3))
-nPFOA.fireruns2 <-  ggplot(data.frame(resid = resid(nPFOAmdl2), fitted = fitted(nPFOAmdl2)), 
-                          aes(x = fitted, y = resid)) +
-                          geom_point(size = 2) +
-                          geom_hline(yintercept = 0) +
-                          theme(axis.text = element_text(size = 15))
-nPFOAmdlT <- lm(nPFOAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-nPFOAtrans.fireruns <-  ggplot(data.frame(resid = resid(nPFOAmdlT), fitted = fitted(nPFOAmdlT)), 
-                          aes(x = fitted, y = resid)) +
-                          geom_point(size = 2) +
-                          geom_hline(yintercept = 0) +
-                          theme(axis.text = element_text(size = 15))
-#Use transformed version
-
-
-grid.arrange(nPFOA.fireruns, nPFOA.fireruns2, nPFOAtrans.fireruns)
-
-
-plotscd1 <- sapply(list(nPFOAmdl, nPFOAmdl2, nPFOAmdlT), cooks_distance_plot)
-ggarrange(plotlist = plotscd1)
-
-fbeta1a <- fbetas_plot(nPFOAmdl)
-fbeta1b <- fbetas_plot(nPFOAmdl2)
-fbeta1c <- fbetas_plot(nPFOAmdlT)
-plotsf1 <-  list(fbeta1a$`(Intercept)`$plot, fbeta1a$total.num.fireruns$plot,
-                 fbeta1a$EthnicityHispanic$plot, fbeta1b$`(Intercept)`$plot,
-                 fbeta1b$total.num.fireruns$plot, fbeta1b$EthnicityHispanic$plot,
-                 fbeta1c$`(Intercept)`$plot, fbeta1c$total.num.fireruns$plot,
-                 fbeta1c$EthnicityHispanic$plot)
-ggarrange(plotlist = plotsf1)
-
-
-#nPFOS ~ fireruns
-nPFOSmdl <- lm(nPFOSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-nPFOS.fireruns <- ggplot(data.frame(resid = resid(nPFOSmdl), fitted = fitted(nPFOSmdl)), 
-                          aes(x = fitted, y = resid)) +
-                          geom_point(size = 2) +
-                          geom_hline(yintercept = 0) +
-                          theme(axis.text = element_text(size = 15))
-nPFOSmdlT <- lm(nPFOStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-nPFOStrans.fireruns <-  ggplot(data.frame(resid = resid(nPFOSmdlT), fitted = fitted(nPFOSmdlT)), 
-                          aes(x = fitted, y = resid)) +
-                          geom_point(size = 2) +
-                          geom_hline(yintercept = 0) +
-                          theme(axis.text = element_text(size = 15))
-#Use original version, check if points below -2 change the inference
-grid.arrange(nPFOS.fireruns, nPFOStrans.fireruns)
-
-plotscd2 <- sapply(list(nPFOSmdl, nPFOSmdlT), cooks_distance_plot)
-ggarrange(plotlist = plotscd2)
-
-fbeta2a <- fbetas_plot(nPFOSmdl)
-fbeta2b <- fbetas_plot(nPFOAmdlT)
-plotsf2 <-  list(fbeta2a$`(Intercept)`$plot, fbeta2a$total.num.fireruns$plot,
-                 fbeta2a$EthnicityHispanic$plot, fbeta2b$`(Intercept)`$plot,
-                 fbeta2b$total.num.fireruns$plot, fbeta2b$EthnicityHispanic$plot)
-ggarrange(plotlist = plotsf2)
-
-
-
-#PFDEA ~ fireruns
-PFDEAmdl <- lm(PFDEAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-PFDEA.fireruns <- ggplot(data.frame(resid = resid(PFDEAmdl), fitted = fitted(PFDEAmdl)), 
-                          aes(x = fitted, y = resid)) +
-                          geom_point(size = 2) +
-                          geom_hline(yintercept = 0) +
-                          theme(axis.text = element_text(size = 15))
-PFDEAmdlT <- lm(PFDEAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-PFDEAtrans.fireruns <-  ggplot(data.frame(resid = resid(PFDEAmdlT), fitted = fitted(PFDEAmdlT)), 
-                          aes(x = fitted, y = resid)) +
-                          geom_point(size = 2) +
-                          geom_hline(yintercept = 0) +
-                          theme(axis.text = element_text(size = 15))
-#Use original version, check if points below -2 change the inference
-grid.arrange(PFDEA.fireruns, PFDEAtrans.fireruns)
-
-plotscd3 <- sapply(list(PFDEAmdl, PFDEAmdlT), cooks_distance_plot)
-ggarrange(plotlist = plotscd3)
-
-fbeta3a <- fbetas_plot(PFDEAmdl)
-fbeta3b <- fbetas_plot(nPFOAmdlT)
-plotsf3 <-  list(fbeta3a$`(Intercept)`$plot, fbeta3a$total.num.fireruns$plot,
-                 fbeta3a$EthnicityHispanic$plot, fbeta3b$`(Intercept)`$plot,
-                 fbeta3b$total.num.fireruns$plot, fbeta3b$EthnicityHispanic$plot)
-ggarrange(plotlist = plotsf3)
-
-
-#PFHXS ~ fireruns
-PFHXSmdl <- lm(PFHXSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-PFHXS.fireruns <- plot(resid(PFHXSmdl) ~ fitted(PFHXSmdl))
-abline(h = 0)
-PFHXSmdlT <- lm(PFHXStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-PFHXStrans.fireruns <- plot(resid(PFHXSmdlT) ~ fitted(PFHXSmdlT))
-abline(h = 0)
-#use the original version, look at those below -2 to see if inference changes
-plots4 <- list(PFHXS.fireruns, PFHXStrans.fireruns)
-ggarrange(plotlist = plots4, ncol = 2, nrow = 1)
-
-
-#PFNA ~ fireruns
-PFNAmdl <- lm(PFNAorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-PFNA.fireruns <- plot(resid(PFNAmdl) ~ fitted(PFNAmdl))
-abline(h = 0)
-# qqnorm(resid(PFNAmdl))
-# qqline(resid(PFNAmdl))
-PFNAmdl2 <- lm(PFNAorig ~ total.num.fireruns + Ethnicity, data = FireChange2 %>% filter(PFNAorig > -8)) # Weird outlier causing problems
-PFNA.fireruns2 <- plot(resid(PFNAmdl2) ~ fitted(PFNAmdl2))
-abline(h = 0)
-#use original with >-8 removed
-#maybe also remove the point above 2 see what changes
-PFNAmdlT <- lm(PFNAtrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-PFNAtrans.fireruns <- plot(resid(PFNAmdlT) ~ fitted(PFNAmdlT))
-abline(h = 0)
-plots5 <- list(PFNA.fireruns, PFNA.fireruns2, PFNAtrans.fireruns)
-ggarrange(plotlist = plots5, ncol = 1, nrow = 2)
-
-
-#SmPFOS ~ fireruns
-SmPFOSmdl <- lm(SmPFOSorig ~ total.num.fireruns + Ethnicity, data = FireChange2)
-SmPFOS.fireruns <- plot(resid(SmPFOSmdl) ~ fitted(SmPFOSmdl))
-plot(cooks.distance(SmPFOSmdl))
-plot(SmPFOSmdl)
-ols_plot_cooksd_bar(SmPFOSmdl)
-abline(h = 0)
-SmPFOStrans.fireruns <- SmPFOSmdlT <- lm(SmPFOStrans ~ total.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdlT) ~ fitted(SmPFOSmdlT))
-abline(h = 0)
-plots6 <- list(SmPFOS.fireruns, SmPFOStrans.fireruns)
-ggarrange(plotlist = plots6, ncol = 1, nrow = 2)
-
-
-
-```
-
-```{R change score residuals - str.num.fireruns, results = 'asis', eval = F}
-
-#nPFOA ~ structural fireruns
-nPFOAmdl.str <- lm(nPFOAorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
-nPFOA.Sfireruns <- plot(resid(nPFOAmdl.str) ~ fitted(nPFOAmdl.str))
-abline(h = 0)
-nPFOAmdlT.str <- lm(nPFOAtrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
-nPFOAtrans.Sfireruns <-  plot(resid(nPFOAmdlT.str) ~ fitted(nPFOAmdlT.str))
-abline(h = 0)
-
-plots7 <- list(nPFOA.Sfireruns, nPFOAtrans.Sfireruns)
-ggarrange(plotlist = plots7, ncol = 2, nrow = 1)
-
-
-#nPFOS ~ structural fireruns
-nPFOSmdl.str <- lm(nPFOSorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
-nPFOS.Sfireruns <- plot(resid(nPFOSmdl.str) ~ fitted(nPFOSmdl.str))
-abline(h = 0)
-nPFOStrans.Sfireruns <- nPFOSmdlT.str <- lm(nPFOStrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdlT.str) ~ fitted(nPFOSmdlT.str))
-abline(h = 0)
-
-plots8 <- list(nPFOS.Sfireruns, nPFOStrans.Sfireruns)
-ggarrange(plotlist = plots8, ncol = 2, nrow = 1)
-
-
-#PFDEA ~ structural fireruns
-PFDEAmdl.str <- lm(PFDEAorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
-PFDEA.Sfireruns <- plot(resid(PFDEAmdl.str) ~ fitted(PFDEAmdl.str))
-abline(h = 0)
-PFDEAtrans.Sfireruns <- PFDEAmdlT.str <- lm(PFDEAtrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdlT.str) ~ fitted(PFDEAmdlT.str))
-abline(h = 0)
-#use original version
-plots9 <- list(PFDEA.Sfireruns, PFDEAtrans.Sfireruns)
-ggarrange(plotlist = plots9, ncol = 1, nrow = 2)
-
-
-#PFHXS ~ structural fireruns
-PFHXSmdl.str <- lm(PFHXSorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
-PFHXS.Sfireruns <- plot(resid(PFHXSmdl.str) ~ fitted(PFHXSmdl.str))
-abline(h = 0)
-PFHXSmdlT.str <- lm(PFHXStrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
-PFHXStrans.Sfireruns <- plot(resid(PFHXSmdlT.str) ~ fitted(PFHXSmdlT.str))
-abline(h = 0)
-
-plots10 <- list(PFHXS.Sfireruns, PFHXStrans.Sfireruns)
-ggarrange(plotlist = plots10, ncol = 2, nrow = 1)
-
-
-#PFNA ~ structural fireruns
-PFNAmdl.str <- lm(PFNAorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
-PFNA.Sfireruns <- plot(resid(PFNAmdl.str) ~ fitted(PFNAmdl.str))
-abline(h = 0)
-PFNAmdlT.str <- lm(PFNAtrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
-PFNAtrans.Sfireruns <- plot(resid(PFNAmdlT.str) ~ fitted(PFNAmdlT.str))
-abline(h = 0)
-plots11 <- list(PFNA.Sfireruns, PFNAtrans.Sfireruns)
-ggarrange(plotlist = plots11, ncol = 2, nrow = 1)
-
-
-#SmPFOS ~ structural fireruns
-SmPFOSmdl.str <- lm(SmPFOSorig ~ str.num.fireruns + Ethnicity, data = FireChange2)
-SmPFOS.Sfireruns <- plot(resid(SmPFOSmdl.str) ~ fitted(SmPFOSmdl.str))
-abline(h = 0)
-SmPFOStrans.Sfireruns <- SmPFOSmdlT.str <- lm(SmPFOStrans ~ str.num.fireruns + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdlT.str) ~ fitted(SmPFOSmdlT.str))
-abline(h = 0)
-plots12 <- list(SmPFOS.Sfireruns, SmPFOStrans.Sfireruns)
-ggarrange(plotlist = plots12, ncol = 2, nrow = 1)
-
+  
 
 
 ```
 
 
-```{R change score residuals - days.since.struc.MRF, results = 'asis', eval = F}
 
-#nPFOA ~ Days since structural MRF fireruns
-nPFOAmdl.MRF <- lm(nPFOAorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-nPFOA.MRF <- plot(resid(nPFOAmdl.MRF) ~ fitted(nPFOAmdl.MRF))
-abline(h = 0)
-nPFOAmdlT.MRF <- lm(nPFOAtrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-nPFOAtrans.MRF <-  plot(resid(nPFOAmdlT.MRF) ~ fitted(nPFOAmdlT.MRF))
-abline(h = 0)
 
-plots13 <- list(nPFOA.MRF, nPFOAtrans.MRF)
-ggarrange(plotlist = plots13, ncol = 2, nrow = 1)
 
 
-#nPFOS ~ Days since structural MRF fireruns
-nPFOSmdl.MRF <- lm(nPFOSorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-nPFOS.MRF <- plot(resid(nPFOSmdl.MRF) ~ fitted(nPFOSmdl.MRF))
-abline(h = 0)
-nPFOStrans.MRF <- nPFOSmdlT.MRF <- lm(nPFOStrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdlT.MRF) ~ fitted(nPFOSmdlT.MRF))
-abline(h = 0)
 
-plots14 <- list(nPFOS.MRF, nPFOStrans.MRF)
-ggarrange(plotlist = plots14, ncol = 2, nrow = 1)
-
-#PFDEA ~ Days since structural MRF fireruns
-PFDEAmdl.MRF <- lm(PFDEAorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-PFDEA.MRF <- plot(resid(PFDEAmdl.MRF) ~ fitted(PFDEAmdl.MRF))
-abline(h = 0)
-PFDEAtrans.MRF <- PFDEAmdlT.MRF <- lm(PFDEAtrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdlT.MRF) ~ fitted(PFDEAmdlT.MRF))
-abline(h = 0)
-
-plots15 <- list(PFDEA.MRF, PFDEAtrans.MRF)
-ggarrange(plotlist = plots15, ncol = 1, nrow = 2)
-
-#PFHXS ~ Days since structural MRF fireruns
-PFHXSmdl.MRF <- lm(PFHXSorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-PFHXS.MRF <- plot(resid(PFHXSmdl.MRF) ~ fitted(PFHXSmdl.MRF))
-abline(h = 0)
-PFHXSmdlT.MRF <- lm(PFHXStrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-PFHXStrans.MRF <- plot(resid(PFHXSmdlT.MRF) ~ fitted(PFHXSmdlT.MRF))
-abline(h = 0)
-plots16 <- list(PFHXS.MRF, PFHXStrans.MRF)
-ggarrange(plotlist = plots16, ncol = 2, nrow = 1)
-
-
-#PFNA ~ Days since structural MRF fireruns
-PFNAmdl.MRS <- lm(PFNAorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-PFNA.MRS <- plot(resid(PFNAmdl.MRS) ~ fitted(PFNAmdl.MRS))
-abline(h = 0)
-PFNAmdlT.MRS <- lm(PFNAtrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-PFNAtrans.MRS <- plot(resid(PFNAmdlT.MRS) ~ fitted(PFNAmdlT.MRS))
-abline(h = 0)
-plots17 <- list(PFNA.MRS, PFNAtrans.MRS)
-ggarrange(plotlist = plots17, ncol = 2, nrow = 1)
-
-
-#SmPFOS ~ Days since structural MRF fireruns
-SmPFOSmdl.MRS <- lm(SmPFOSorig ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-SmPFOS.MRS <- plot(resid(SmPFOSmdl.MRS) ~ fitted(SmPFOSmdl.MRS))
-abline(h = 0)
-SmPFOStrans.MRS <- SmPFOSmdlT.MRS <- lm(SmPFOStrans ~ days.since.struc.MRF + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdlT.MRS) ~ fitted(SmPFOSmdlT.MRS))
-abline(h = 0)
-plots18 <- list(SmPFOS.MRS, SmPFOStrans.MRS)
-ggarrange(plotlist = plots18, ncol = 2, nrow = 1)
-
-
-
-```
-
-```{R change score residuals - days.since.MRF, results = 'asis', eval = F}
-
-#nPFOA ~ Days since  MRF 
-nPFOAmdl.MRF <- lm(nPFOAorig ~ days.since.MRF + Ethnicity, data = FireChange2)
-nPFOA.MRF <- plot(resid(nPFOAmdl.MRF) ~ fitted(nPFOAmdl.MRF))
-abline(h = 0)
-nPFOAmdlT.MRF <- lm(nPFOAtrans ~ days.since.MRF + Ethnicity, data = FireChange2)
-nPFOAtrans.MRF <-  plot(resid(nPFOAmdlT.MRF) ~ fitted(nPFOAmdlT.MRF))
-abline(h = 0)
-
-plots19 <- list(nPFOA.MRF, nPFOAtrans.MRF)
-ggarrange(plotlist = plots19, ncol = 2, nrow = 1)
-
-
-#nPFOS ~ Days since  MRF 
-nPFOSmdl.MRF <- lm(nPFOSorig ~ days.since.MRF + Ethnicity, data = FireChange2)
-nPFOS.MRF <- plot(resid(nPFOSmdl.MRF) ~ fitted(nPFOSmdl.MRF))
-abline(h = 0)
-nPFOStrans.MRF <- nPFOSmdlT.MRF <- lm(nPFOStrans ~ days.since.MRF + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdlT.MRF) ~ fitted(nPFOSmdlT.MRF))
-abline(h = 0)
-plots20 <- list(nPFOS.MRF, nPFOStrans.MRF)
-ggarrange(plotlist = plots20, ncol = 2, nrow = 1)
-
-
-#PFDEA ~ Days since  MRF 
-PFDEAmdl.MRF <- lm(PFDEAorig ~ days.since.MRF + Ethnicity, data = FireChange2)
-PFDEA.MRF <- plot(resid(PFDEAmdl.MRF) ~ fitted(PFDEAmdl.MRF))
-abline(h = 0)
-PFDEAtrans.MRF <- PFDEAmdlT.MRF <- lm(PFDEAtrans ~ days.since.MRF + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdlT.MRF) ~ fitted(PFDEAmdlT.MRF))
-abline(h = 0)
-plots21 <- list(PFDEA.MRF, PFDEAtrans.MRF)
-ggarrange(plotlist = plots21, ncol = 1, nrow = 2)
-
-
-#PFHXS ~ Days since MRF 
-PFHXSmdl.MRF <- lm(PFHXSorig ~ days.since.MRF + Ethnicity, data = FireChange2)
-PFHXS.MRF <- plot(resid(PFHXSmdl.MRF) ~ fitted(PFHXSmdl.MRF))
-abline(h = 0)
-PFHXSmdlT.MRF <- lm(PFHXStrans ~ days.since.MRF + Ethnicity, data = FireChange2)
-PFHXStrans.MRF <- plot(resid(PFHXSmdlT.MRF) ~ fitted(PFHXSmdlT.MRF))
-abline(h = 0)
-plots22 <- list(PFHXS.MRF, PFHXStrans.MRF)
-ggarrange(plotlist = plots22, ncol = 2, nrow = 1)
-
-
-#PFNA ~ Days since  MRF 
-PFNAmdl.MRF <- lm(PFNAorig ~ days.since.MRF + Ethnicity, data = FireChange2)
-PFNA.MRF <- plot(resid(PFNAmdl.MRF) ~ fitted(PFNAmdl.MRF))
-abline(h = 0)
-PFNAmdlT.MRF <- lm(PFNAtrans ~ days.since.MRF + Ethnicity, data = FireChange2)
-PFNAtrans.MRF <- plot(resid(PFNAmdlT.MRF) ~ fitted(PFNAmdlT.MRF))
-abline(h = 0)
-plots23 <- list(PFNA.MRF, PFNAtrans.MRF)
-ggarrange(plotlist = plots23, ncol = 2, nrow = 1)
-
-
-#SmPFOS ~ Days since MRF 
-SmPFOSmdl.MRF <- lm(SmPFOSorig ~ days.since.MRF + Ethnicity, data = FireChange2)
-SmPFOS.MRF <- plot(resid(SmPFOSmdl.MRF) ~ fitted(SmPFOSmdl.MRF))
-abline(h = 0)
-SmPFOStrans.MRF <- SmPFOSmdlT.MRF <- lm(SmPFOStrans ~ days.since.MRF + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdlT.MRF) ~ fitted(SmPFOSmdlT.MRF))
-abline(h = 0)
-plots24 <- list(SmPFOS.MRF, SmPFOStrans.MRF)
-ggarrange(plotlist = plots24, ncol = 2, nrow = 1)
-
-
-
-```
-
-
-```{R change score residuals - time.since.baseline, results = 'asis', eval = F}
-
-#nPFOA ~ time since baseline
-nPFOAmdl.time <- lm(nPFOAorig ~ time.since.baseline + Ethnicity, data = FireChange2)
-nPFOA.time <- plot(resid(nPFOAmdl.time) ~ fitted(nPFOAmdl.time))
-abline(h = 0)
-nPFOAmdlT.time <- lm(nPFOAtrans ~ time.since.baseline + Ethnicity, data = FireChange2)
-nPFOAtrans.time <-  plot(resid(nPFOAmdlT.time) ~ fitted(nPFOAmdlT.time))
-abline(h = 0)
-
-plots25 <- list(nPFOA.time, nPFOAtrans.time)
-ggarrange(plotlist = plots25, ncol = 2, nrow = 1)
-
-
-#nPFOS ~ time since baseline
-nPFOSmdl.time <- lm(nPFOSorig ~ time.since.baseline + Ethnicity, data = FireChange2)
-nPFOS.time <- plot(resid(nPFOSmdl.time) ~ fitted(nPFOSmdl.time))
-abline(h = 0)
-nPFOStrans.time <- nPFOSmdlT.time <- lm(nPFOStrans ~ time.since.baseline + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdlT.time) ~ fitted(nPFOSmdlT.time))
-abline(h = 0)
-plots26 <- list(nPFOS.time, nPFOStrans.time)
-ggarrange(plotlist = plots26, ncol = 2, nrow = 1)
-
-
-#PFDEA ~ time since baseline
-PFDEAmdl.time <- lm(PFDEAorig ~ time.since.baseline + Ethnicity, data = FireChange2)
-PFDEA.time <- plot(resid(PFDEAmdl.time) ~ fitted(PFDEAmdl.time))
-abline(h = 0)
-PFDEAtrans.time <- PFDEAmdlT.time <- lm(PFDEAtrans ~ time.since.baseline + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdlT.time) ~ fitted(PFDEAmdlT.time))
-abline(h = 0)
-plots27 <- list(PFDEA.time, PFDEAtrans.time)
-ggarrange(plotlist = plots27, ncol = 1, nrow = 2)
-
-
-#PFHXS ~ time since baseline
-PFHXSmdl.time <- lm(PFHXSorig ~ time.since.baseline + Ethnicity, data = FireChange2)
-PFHXS.time <- plot(resid(PFHXSmdl.time) ~ fitted(PFHXSmdl.time))
-abline(h = 0)
-PFHXSmdlT.time <- lm(PFHXStrans ~ time.since.baseline + Ethnicity, data = FireChange2)
-PFHXStrans.time <- plot(resid(PFHXSmdlT.time) ~ fitted(PFHXSmdlT.time))
-abline(h = 0)
-plots28 <- list(PFHXS.time, PFHXStrans.time)
-ggarrange(plotlist = plots28, ncol = 2, nrow = 1)
-
-
-#PFNA ~ time since baseline
-PFNAmdl.time <- lm(PFNAorig ~ time.since.baseline + Ethnicity, data = FireChange2)
-PFNA.time <- plot(resid(PFNAmdl.time) ~ fitted(PFNAmdl.time))
-abline(h = 0)
-PFNAmdlT.time <- lm(PFNAtrans ~ time.since.baseline + Ethnicity, data = FireChange2)
-PFNAtrans.time <- plot(resid(PFNAmdlT.time) ~ fitted(PFNAmdlT.time))
-abline(h = 0)
-plots29 <- list(PFNA.time, PFNAtrans.time)
-ggarrange(plotlist = plots29, ncol = 2, nrow = 1)
-
-
-#SmPFOS ~ time since baseline
-SmPFOSmdl.time <- lm(SmPFOSorig ~ time.since.baseline + Ethnicity, data = FireChange2)
-SmPFOS.time <- plot(resid(SmPFOSmdl.time) ~ fitted(SmPFOSmdl.time))
-abline(h = 0)
-SmPFOStrans.time <- SmPFOSmdlT.time <- lm(SmPFOStrans ~ time.since.baseline + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdlT.time) ~ fitted(SmPFOSmdlT.time))
-abline(h = 0)
-plots30 <- list(SmPFOS.time, SmPFOStrans.time)
-ggarrange(plotlist = plots30, ncol = 2, nrow = 1)
-
-
-
-```
-
-
-
-```{R change score residuals - total.duration, results = 'asis', eval = F}
-
-#nPFOA ~ total duration
-nPFOAmdl.duration <- lm(nPFOAorig ~ total.duration + Ethnicity, data = FireChange2)
-nPFOA.duration <- plot(resid(nPFOAmdl.duration) ~ fitted(nPFOAmdl.duration))
-abline(h = 0)
-nPFOAmdlT.duration <- lm(nPFOAtrans ~ total.duration + Ethnicity, data = FireChange2)
-nPFOAtrans.duration <-  plot(resid(nPFOAmdlT.duration) ~ fitted(nPFOAmdlT.duration))
-abline(h = 0)
-
-plots31 <- list(nPFOA.duration, nPFOAtrans.duration)
-ggarrange(plotlist = plots31, ncol = 2, nrow = 1)
-
-
-#nPFOS ~ total duration
-nPFOSmdl.duration <- lm(nPFOSorig ~ total.duration + Ethnicity, data = FireChange2)
-nPFOS.duration <- plot(resid(nPFOSmdl.duration) ~ fitted(nPFOSmdl.duration))
-abline(h = 0)
-nPFOStrans.duration <- nPFOSmdlT.duration <- lm(nPFOStrans ~ total.duration + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdlT.duration) ~ fitted(nPFOSmdlT.duration))
-abline(h = 0)
-plots32 <- list(nPFOS.duration, nPFOStrans.duration)
-ggarrange(plotlist = plots32, ncol = 2, nrow = 1)
-
-
-#PFDEA ~ total duration
-PFDEAmdl.duration <- lm(PFDEAorig ~ total.duration + Ethnicity, data = FireChange2)
-PFDEA.duration <- plot(resid(PFDEAmdl.duration) ~ fitted(PFDEAmdl.duration))
-abline(h = 0)
-PFDEAtrans.duration <- PFDEAmdlT.duration <- lm(PFDEAtrans ~ total.duration + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdlT.duration) ~ fitted(PFDEAmdlT.duration))
-abline(h = 0)
-plots33 <- list(PFDEA.duration, PFDEAtrans.duration)
-ggarrange(plotlist = plots33, ncol = 1, nrow = 2)
-
-
-#PFHXS ~ total duration
-PFHXSmdl.duration <- lm(PFHXSorig ~ total.duration + Ethnicity, data = FireChange2)
-PFHXS.duration <- plot(resid(PFHXSmdl.duration) ~ fitted(PFHXSmdl.duration))
-abline(h = 0)
-PFHXSmdlT.duration <- lm(PFHXStrans ~ total.duration + Ethnicity, data = FireChange2)
-PFHXStrans.duration <- plot(resid(PFHXSmdlT.duration) ~ fitted(PFHXSmdlT.duration))
-abline(h = 0)
-plots34 <- list(PFHXS.duration, PFHXStrans.duration)
-ggarrange(plotlist = plots34, ncol = 2, nrow = 1)
-
-
-#PFNA ~ total duration
-PFNAmdl.duration <- lm(PFNAorig ~ total.duration + Ethnicity, data = FireChange2)
-PFNA.duration <- plot(resid(PFNAmdl.duration) ~ fitted(PFNAmdl.duration))
-abline(h = 0)
-PFNAmdlT.duration <- lm(PFNAtrans ~ total.duration + Ethnicity, data = FireChange2)
-PFNAtrans.duration <- plot(resid(PFNAmdlT.duration) ~ fitted(PFNAmdlT.duration))
-abline(h = 0)
-plots35 <- list(PFNA.duration, PFNAtrans.duration)
-ggarrange(plotlist = plots35, ncol = 2, nrow = 1)
-
-
-#SmPFOS ~ total duration
-SmPFOSmdl.duration <- lm(SmPFOSorig ~ total.duration + Ethnicity, data = FireChange2)
-SmPFOS.duration <- plot(resid(SmPFOSmdl.duration) ~ fitted(SmPFOSmdl.duration))
-abline(h = 0)
-SmPFOStrans.duration <- SmPFOSmdlT.duration <- lm(SmPFOStrans ~ total.duration + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdlT.duration) ~ fitted(SmPFOSmdlT.duration))
-abline(h = 0)
-plots36 <- list(SmPFOS.duration, SmPFOStrans.duration)
-ggarrange(plotlist = plots36, ncol = 2, nrow = 1)
-
-
-
-```
-
-
-```{R change score residuals - str.duration, results = 'asis', eval = F}
-
-#nPFOA ~ structural duration
-nPFOAmdl.str.duration <- lm(nPFOAorig ~ str.duration + Ethnicity, data = FireChange2)
-nPFOA.str.duration <- plot(resid(nPFOAmdl.str.duration) ~ fitted(nPFOAmdl.str.duration))
-abline(h = 0)
-nPFOAmdlT.str.duration <- lm(nPFOAtrans ~ str.duration + Ethnicity, data = FireChange2)
-nPFOAtrans.str.duration <-  plot(resid(nPFOAmdlT.str.duration) ~ fitted(nPFOAmdlT.str.duration))
-abline(h = 0)
-
-plots37 <- list(nPFOA.str.duration, nPFOAtrans.str.duration)
-ggarrange(plotlist = plots37, ncol = 2, nrow = 1)
-
-
-#nPFOS ~ structural duration
-nPFOSmdl.str.duration <- lm(nPFOSorig ~ str.duration + Ethnicity, data = FireChange2)
-nPFOS.str.duration <- plot(resid(nPFOSmdl.str.duration) ~ fitted(nPFOSmdl.str.duration))
-abline(h = 0)
-nPFOStrans.str.duration <- nPFOSmdlT.str.duration <- lm(nPFOStrans ~ str.duration + Ethnicity, data = FireChange2)
-plot(resid(nPFOSmdlT.str.duration) ~ fitted(nPFOSmdlT.str.duration))
-abline(h = 0)
-plots38 <- list(nPFOS.str.duration, nPFOStrans.str.duration)
-ggarrange(plotlist = plots38, ncol = 2, nrow = 1)
-
-
-#PFDEA ~ structural duration
-PFDEAmdl.str.duration <- lm(PFDEAorig ~ str.duration + Ethnicity, data = FireChange2)
-PFDEA.str.duration <- plot(resid(PFDEAmdl.str.duration) ~ fitted(PFDEAmdl.str.duration))
-abline(h = 0)
-PFDEAtrans.str.duration <- PFDEAmdlT.str.duration <- lm(PFDEAtrans ~ str.duration + Ethnicity, data = FireChange2)
-plot(resid(PFDEAmdlT.str.duration) ~ fitted(PFDEAmdlT.str.duration))
-abline(h = 0)
-plots39 <- list(PFDEA.str.duration, PFDEAtrans.str.duration)
-ggarrange(plotlist = plots39, ncol = 1, nrow = 2)
-
-
-#PFHXS ~ structural duration
-PFHXSmdl.str.duration <- lm(PFHXSorig ~ str.duration + Ethnicity, data = FireChange2)
-PFHXS.str.duration <- plot(resid(PFHXSmdl.str.duration) ~ fitted(PFHXSmdl.str.duration))
-abline(h = 0)
-PFHXSmdlT.str.duration <- lm(PFHXStrans ~ str.duration + Ethnicity, data = FireChange2)
-PFHXStrans.str.duration <- plot(resid(PFHXSmdlT.str.duration) ~ fitted(PFHXSmdlT.str.duration))
-abline(h = 0)
-plots40 <- list(PFHXS.str.duration, PFHXStrans.str.duration)
-ggarrange(plotlist = plots40, ncol = 2, nrow = 1)
-
-
-#PFNA ~ structural duration
-PFNAmdl.str.duration <- lm(PFNAorig ~ str.duration + Ethnicity, data = FireChange2)
-PFNA.str.duration <- plot(resid(PFNAmdl.str.duration) ~ fitted(PFNAmdl.str.duration))
-abline(h = 0)
-PFNAmdlT.str.duration <- lm(PFNAtrans ~ str.duration + Ethnicity, data = FireChange2)
-PFNAtrans.str.duration <- plot(resid(PFNAmdlT.str.duration) ~ fitted(PFNAmdlT.str.duration))
-abline(h = 0)
-plots41 <- list(PFNA.str.duration, PFNAtrans.str.duration)
-ggarrange(plotlist = plots41, ncol = 2, nrow = 1)
-
-
-#SmPFOS ~ structural duration
-SmPFOSmdl.str.duration <- lm(SmPFOSorig ~ str.duration + Ethnicity, data = FireChange2)
-SmPFOS.str.duration <- plot(resid(SmPFOSmdl.str.duration) ~ fitted(SmPFOSmdl.str.duration))
-abline(h = 0)
-SmPFOStrans.str.duration <- SmPFOSmdlT.str.duration <- lm(SmPFOStrans ~ str.duration + Ethnicity, data = FireChange2)
-plot(resid(SmPFOSmdlT.str.duration) ~ fitted(SmPFOSmdlT.str.duration))
-abline(h = 0)
-plots42 <- list(SmPFOS.str.duration, SmPFOStrans.str.duration)
-ggarrange(plotlist = plots42, ncol = 2, nrow = 1)
-
-
-
-```
-
-For every change score models, get more diagnostic information (cooks distance, and dfbetas) for both original and transformed models: https://cran.r-project.org/web/packages/olsrr/vignettes/influence_measures.html
+<!-- For every change score models, get more diagnostic information (cooks distance, and dfbetas) for both original and transformed models: https://cran.r-project.org/web/packages/olsrr/vignettes/influence_measures.html
 
 options: get rid of a point or two, or transform. would probably prefer to transform because we can leave the point in the model. 
 Use ggarrange to condense the output a little
@@ -2731,6 +3357,6 @@ Use ggarrange to condense the output a little
 * I should look through Amy’s incumbent vs. new recruit info.
 * Make sure longitudinal models are done
 * need to do dichotomous models
-* Think about how to control for multiple comparisons
+* Think about how to control for multiple comparisons -->
 
 
