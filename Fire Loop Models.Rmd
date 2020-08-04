@@ -1,7 +1,7 @@
 ---
 title: "TFD longitudinal analyses"
 author: "Amy Nematollahi and Julia Fisher"
-date: "7/27/2020"
+date: "8/4/2020"
 output:
   pdf_document: default
   word_document: default
@@ -23,6 +23,7 @@ library(ggplot2)
 library(gridExtra)
 library(grid)
 library(kableExtra)
+library(knitr)
 library(lubridate)
 library(lme4)
 library(stringr)
@@ -255,6 +256,7 @@ processed.dta <- rbind(out.dta1, out.dta2, out.dta3, out.dta4)
 
 
 ```
+
 
 ```{r, read in three subjects missing from Alesias file}
 
@@ -1555,22 +1557,6 @@ SmPFOSlambda <- as.numeric(transformTukey(FireChange2$SmPFOStrans.tmp, plotit = 
 
 ```
 
-```{r Tukey Transformation lambdas, eval = F}
-
-  # PFOSAlambda = 9.95
-  # nPFOAlambda = 4.65
-  # nPFOSlambda = 3.125
-  # PFDEAlambda = -3.1
-  # PFHXSlambda = 1.125
-  # PFNAlambda = 4.6
-  # PFUAlambda = -1.825
-  # SbPFOAlambda = 5.95
-  # SmPFOSlambda = 2.95
-  # 
-  
-```
-
-
 ```{r models for change in levels, eval = F}
 
 # For each PFAS create separate models for:
@@ -1911,7 +1897,6 @@ ggplot(FireChange2, aes(x = SmPFOStrans)) +
 
 ```{r cooks distance function}
 
-
 cooks_distance_plot <- function(mdl, st) { #added subtitle (st) in function for printing purposes
   cooksd <- cooks.distance(mdl)
   df.mdl <- length(coef(mdl))
@@ -1991,7 +1976,8 @@ fbetas_plot <- function(mdl, st, t = 'one') { #added subtitle (st) for printing 
 
 ```
 
-```{r change function, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
+```{r change function, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2081,13 +2067,31 @@ qq.plot.trans <- ggplot(assumptions.df.t, aes(x = trans_qq_theor, y = trans_qq_s
           axis.title = element_text(size = 10))
 
 #Cooks distance plots
+
+
 cd.plot.orig <-  cooks_distance_plot(out_info$pfasmdl, 
                                      paste0(out_info$pfasmdl$terms[[2]], ": ",
                                             out_info$pfasmdl$terms[[3]][2]))
 
-  
 cd.plot.trans <- cooks_distance_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
                                                                out_info$transmdl$terms[[3]][2]))
+
+cd.table <- data.frame(Original.indices = as.numeric(),
+                       Transformed.indices = as.numeric())
+
+cd.table2 <- rbind(as.numeric(cd.plot.orig$problem_indices[1]), as.numeric(cd.plot.trans$problem_indices[1]), 
+                   na.rm = FALSE) 
+
+cd.table3 <- rbind(cd.table, cd.table2)  %>%
+  mutate(Orig.indices = cd.plot.orig$problem_indices[1],
+         Trans.indices = cd.plot.trans$problem_indices[1]) %>%
+  dplyr::select(-V1) 
+
+  cd.table4 <- cd.table3[-c(2, 3) , ]
+  cd.table5 <- ggtexttable(cd.table4, rows = NULL, theme = ttheme("blank"))
+
+
+
 
 #DFBETA plots
 
@@ -2097,16 +2101,59 @@ fbeta2 <- fbetas_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ":
                                                       out_info$transmdl$terms[[3]][2]))
 
 
-plotlist.a <- list(orig.resid, trans.resid, qq.plot.orig, qq.plot.trans, 
-                   cd.plot.orig$plot, cd.plot.trans$plot,
-                   fbeta1$`(Intercept)`$plot, fbeta2$`(Intercept)`$plot,
-                   fbeta1$EthnicityHispanic$plot, fbeta2$EthnicityHispanic$plot,
-                   fbeta1[[2]][1]$plot, fbeta2[[2]][1]$plot)
+  beta1 <- as.numeric(fbeta1$`(Intercept)`$problem_indices)
+  beta2 <- as.numeric(fbeta1$`[[2]][1]`$problem_indices)
+  beta3 <- as.numeric(fbeta1$EthnicityHispanic$problem_indices)
+  beta4 <- as.numeric(fbeta2$`(Intercept)`$problem_indices)
+  beta5 <- as.numeric(fbeta2$`[[2]][1]`$problem_indices)
+  beta6 <- as.numeric(fbeta2$EthnicityHispanic$problem_indices)
+  beta.out <- list(Intercept.indices.orig = as.numeric(beta1[1]),
+              Exposure.indices.orig  = as.numeric(beta2[1]),
+              EthnHisp.indices.orig = as.numeric(beta3[1]),
+              Intercept.indices.trans = as.numeric(beta4[1]),
+              Exposure.indices.trans  = as.numeric(beta5[1]),
+              EthnHisp.indices.trans = as.numeric(beta6[1]))
+  beta.out1 <- as.data.frame(beta.out)
+
+beta.table <- data.frame(Intercept.indices.orig = as.numeric(),
+                         Intercept.indices.trans = as.numeric(),
+                       Exposure.indices.orig = as.numeric(),
+                       Exposure.indices.trans = as.numeric(),
+                       EthnHisp.indices.orig = as.numeric(),
+                       EthnHisp.indices.trans = as.numeric())
+
+
+beta.table2 <- rbind(beta.table, beta.out1) %>%
+  gather(key = "variable", value = "value") %>%
+  rename(indices = value,
+         Model.terms = variable)
+
+beta.table3 <- ggtexttable(beta.table2, rows = NULL, theme = ttheme("blank"))
+
+
+plotlist.a <- list(orig.resid, trans.resid, 
+                   qq.plot.orig, qq.plot.trans, 
+                   cd.plot.orig$plot,
+                   cd.plot.trans$plot, cd.table5)
+
+
+plotlist.b <- list(fbeta1$`(Intercept)`$plot, fbeta2$`(Intercept)`$plot, 
+                   fbeta1$EthnicityHispanic$plot, fbeta2$EthnicityHispanic$plot, 
+                   fbeta1[[2]][1]$plot, fbeta2[[2]][1]$plot,
+                   beta.table3)
+
+# cat(noquote(paste0("## ", out_info$pfasmdl$terms[[2]], ":", out_info$pfasmdl$terms[[3]][2], " - ",
+#                                       " Model Residuals and cooks distance plots and problem indices")))
+
+print(ggarrange(plotlist = plotlist.a, nrow = 4, ncol = 2))
 
 
 
-print(ggarrange(plotlist = plotlist.a, nrow = 6, ncol = 2))
-    
+# cat(noquote(paste0("## ", out_info$pfasmdl$terms[[2]], ":", out_info$pfasmdl$terms[[3]][2], " - ",
+#                                       " DFBETA plots and problem indices")))
+
+print(ggarrange(plotlist = plotlist.b, nrow = 4, ncol = 2))
+
     
   }
 }
@@ -2115,7 +2162,7 @@ print(ggarrange(plotlist = plotlist.a, nrow = 6, ncol = 2))
 ```
 
 
-```{r nPFOA model time.since.baseline and total.num.fireruns comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+```{r nPFOA model time.since.baseline and total.num.fireruns comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2125,14 +2172,12 @@ compare_fxn <- function(df, fire.var) {
   pfas_orig <- paste0("pfasmdl <- lm(nPFOAorig ~ ", fire.var, " + Ethnicity, data = df)")
   eval(parse(text = pfas_orig))
   pfas_orig_rm <- paste0("pfasmdl.rm <- lm(nPFOAorig ~ ", fire.var, " + Ethnicity, data = df %>% 
-                      .[-40, ] %>%
-                      .[-4, ])")
+                      .[c(-40, -4), ]")
   eval(parse(text = pfas_orig_rm))
   pfas_trans <- paste0("transmdl <- lm(nPFOAtrans ~ ", fire.var, " + Ethnicity, data = df)")
   eval(parse(text = pfas_trans))
   pfas_trans_rm <- paste0("transmdl.rm <- lm(nPFOAtrans ~ ", fire.var, " + Ethnicity, data = df %>% 
-                      .[-40, ] %>%
-                      .[-4, ])")
+                     .[c(-40, -4), ]")
   eval(parse(text = pfas_trans_rm))
   out <- list(pfasmdl = pfasmdl,
               transmdl = transmdl,
@@ -2276,14 +2321,13 @@ plotlist.a <- list(orig.resid, trans.resid, orig.resid.rm, trans.resid.rm,
 
 print(ggarrange(plotlist = plotlist.a, nrow = 4, ncol = 2))
     
-    
   }
 
 
 ```
 
 
-```{r nPFOA/total.num.fireruns/time.since.baseline cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/total.num.fireruns/time.since.baseline cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2317,7 +2361,7 @@ print(ggarrange(plotlist = plotlist.b, nrow = 2, ncol = 2))
 ```
 
 
-```{r nPFOA/total.num.fireruns/time.since.baseline DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/total.num.fireruns/time.since.baseline DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2346,10 +2390,27 @@ print(ggarrange(plotlist = plotlist.c, nrow = 6, ncol = 2))
 
 }
 
+
 ```
 
+```{r nPFOA estimates 1, results = 'asis' , eval = F}
 
-```{r nPFOA/str.num.fireruns/str.duration.hrs model comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
+
+for (fire.var in fire.list) {
+  
+  out_info <-  compare_fxn(FireChange2, fire.var)
+stargazer(out_info$pfasmdl, out_info$pfasmdl.rm, out_info$trans.mdl, out_info$transmdl.rm, title = "nPFOA 
+          Change Score Models: 1) orig, 2) orig influence removed, 3) trans, 4) trans influence removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+}
+
+```
+
+# nPFOA: structural number of fireruns and duration of structural fires\
+```{r nPFOA/str.num.fireruns/str.duration.hrs model comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2359,14 +2420,12 @@ compare_fxn <- function(df, fire.var) {
   pfas_orig <- paste0("pfasmdl <- lm(nPFOAorig ~ ", fire.var, " + Ethnicity, data = df)")
   eval(parse(text = pfas_orig))
   pfas_orig_rm <- paste0("pfasmdl.rm <- lm(nPFOAorig ~ ", fire.var, " + Ethnicity, data = df %>% 
-                      .[-40, ] %>%
-                      .[-4, ])")
+                      .[-40, ]")
   eval(parse(text = pfas_orig_rm))
   pfas_trans <- paste0("transmdl <- lm(nPFOAtrans ~ ", fire.var, " + Ethnicity, data = df)")
   eval(parse(text = pfas_trans))
   pfas_trans_rm <- paste0("transmdl.rm <- lm(nPFOAtrans ~ ", fire.var, " + Ethnicity, data = df %>% 
-                      .[-40, ] %>%
-                      .[-4, ])")
+                      .[-40, ]")
   eval(parse(text = pfas_trans_rm))
   out <- list(pfasmdl = pfasmdl,
               transmdl = transmdl,
@@ -2501,23 +2560,17 @@ qq.plot.trans.rm <- ggplot(assumptions.df.t.rm, aes(x = trans_qq_theor, y = tran
           axis.title = element_text(size = 10))
 
 
-
-
 plotlist.a <- list(orig.resid, trans.resid, orig.resid.rm, trans.resid.rm,
                    qq.plot.orig, qq.plot.trans, qq.plot.orig.rm, qq.plot.trans.rm)
 
-
-
 print(ggarrange(plotlist = plotlist.a, nrow = 4, ncol = 2))
-    
-    
+
   }
 
 
 ```
 
-
-```{r nPFOA/str.num.fireruns/str.duration.hrs cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/str.num.fireruns/str.duration.hrs cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2550,7 +2603,7 @@ print(ggarrange(plotlist = plotlist.b, nrow = 4, ncol = 2))
 ```
 
 
-```{r nPFOA/str.num.fireruns/str.duration.hrs DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/str.num.fireruns/str.duration.hrs DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2581,7 +2634,23 @@ print(ggarrange(plotlist = plotlist.c, nrow = 6, ncol = 2))
 
 ```
 
-```{r nPFOA/total.duration.hrs/days.since.MRF model comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+```{r nPFOA estimates 2, results = "asis", eval = F}
+
+knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
+
+for (fire.var in fire.list2) {
+  
+  out_info <-  compare_fxn(FireChange2, fire.var)
+stargazer(out_info$pfasmdl, out_info$pfasmdl.rm, out_info$trans.mdl, out_info$transmdl.rm, title = "nPFOA 
+          Change Score Models: 1) orig, 2) orig influence removed, 3) trans, 4) trans influence removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+}
+
+```
+
+```{r nPFOA/total.duration.hrs/days.since.MRF model comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2732,15 +2801,11 @@ qq.plot.trans.rm <- ggplot(assumptions.df.t.rm, aes(x = trans_qq_theor, y = tran
           axis.title = element_text(size = 10))
 
 
-
-
 plotlist.a <- list(orig.resid, trans.resid, orig.resid.rm, trans.resid.rm,
                    qq.plot.orig, qq.plot.trans, qq.plot.orig.rm, qq.plot.trans.rm)
 
-
-
 print(ggarrange(plotlist = plotlist.a, nrow = 4, ncol = 2))
-    
+  
     
   }
 
@@ -2748,7 +2813,7 @@ print(ggarrange(plotlist = plotlist.a, nrow = 4, ncol = 2))
 ```
 
 
-```{r nPFOA/total.duration.hrs/days.since.MRF cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/total.duration.hrs/days.since.MRF cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2781,7 +2846,7 @@ print(ggarrange(plotlist = plotlist.b, nrow = 4, ncol = 2))
 ```
 
 
-```{r nPFOA/total.duration.hrs/days.since.MRF DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/total.duration.hrs/days.since.MRF DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2812,8 +2877,23 @@ print(ggarrange(plotlist = plotlist.c, nrow = 6, ncol = 2))
 
 ```
 
+```{r nPFOA estimates 3, results = "asis", eval = F}
 
-```{r nPFOA/days.since.struc.MRF model comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
+knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
+
+for (fire.var in fire.list3) {
+  
+  out_info <-  compare_fxn(FireChange2, fire.var)
+stargazer(out_info$pfasmdl, out_info$pfasmdl.rm, out_info$trans.mdl, out_info$transmdl.rm, title = "nPFOA 
+          Change Score Models: 1) orig, 2) orig influence removed, 3) trans, 4) trans influence removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+}
+
+```
+
+```{r nPFOA/days.since.struc.MRF model comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -2970,18 +3050,15 @@ qq.plot.trans.rm <- ggplot(assumptions.df.t.rm, aes(x = trans_qq_theor, y = tran
 plotlist.a <- list(orig.resid, trans.resid, orig.resid.rm, trans.resid.rm,
                    qq.plot.orig, qq.plot.trans, qq.plot.orig.rm, qq.plot.trans.rm)
 
-
-
 print(ggarrange(plotlist = plotlist.a, nrow = 4, ncol = 2))
-    
-    
+
   }
 
 
 ```
 
 
-```{r nPFOA/days.since.struc.MRF cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/days.since.struc.MRF cooks distance plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -3014,7 +3091,7 @@ print(ggarrange(plotlist = plotlist.b, nrow = 4, ncol = 2))
 ```
 
 
-```{r nPFOA/days.since.struc.MRF DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11}
+```{r nPFOA/days.since.struc.MRF DFBETA plots, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
 
@@ -3045,14 +3122,27 @@ print(ggarrange(plotlist = plotlist.c, nrow = 6, ncol = 2))
 
 ```
 
+```{r nPFOA estimates 4, results = "asis", eval = F}
+knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
+
+for (fire.var in fire.list4) {
+  
+  out_info <-  compare_fxn(FireChange2, fire.var)
+stargazer(out_info$pfasmdl, out_info$pfasmdl.rm, out_info$trans.mdl, out_info$transmdl.rm, title = "nPFOA 
+          Change Score Models: 1) orig, 2) orig influence removed, 3) trans, 4) trans influence removed",
+          single.row = FALSE, header = FALSE, omit.stat = c("f", "ser"), report = "vctp*",
+          intercept.bottom = FALSE, intercept.top = TRUE,
+          digits = 3, font.size = "scriptsize")
+}
+
+```
 
 ```{r check nPFOA models with outliers removed, results = 'asis', fig.width = 8, fig.height = 11, eval = F}
 
 #nPFOA: total.num.fireruns 
 model_nPFOA <- lm(nPFOAorig ~  total.num.fireruns + Ethnicity, data = FireChange2)
 model_nPFOA.rm <- lm(nPFOAorig ~  dtotal.num.fireruns + Ethnicity, data = FireChange2 %>%
-                       .[-40, ] %>%
-                       .[-4, ])
+                       .[c(-40, -4), ] 
 
 Tmodel_nPFOA <- lm(nPFOAtrans ~  total.num.fireruns + Ethnicity, data = FireChange2)
 Tmodel_nPFOA.rm <- lm(nPFOAtrans ~  total.num.fireruns + Ethnicity, data = FireChange2 %>%
@@ -4303,58 +4393,6 @@ stargazer(model_SbPFOA5, model_SbPFOA5.rm, title = "SbPFOA: time since baseline 
 interpret results
 Write function for sensitivity analyses -->
 
-```{r prep baseline PFAS for sensitivity models, eval = F}
-
-#create new variables for:  
-#1) baseline PFAS 
-#2)tukey transformed baseline PFAS  (Julia's code from chunk "read_in_fire_change_debugging_Julia Tukey transformations")
-#Remove females
-
-base.PFAS <- FireChange %>%
-    mutate_at(vars(contains("orig")), funs(base = ifelse(Status ==  'Recruit', ., NA))) %>%
-    mutate(PFOSAtrans.tmp = PFOSAorig  + 11, # We will want to go back to min(.$PFOSAorig)
-         nPFOAtrans.tmp = nPFOAorig + 11,  #AN, after adding min(.$) to all: "Error in in shapiro.test(TRANS) : all 'x' values are identical
-         nPFOStrans.tmp = nPFOSorig + 11,
-         PFDEAtrans.tmp = PFDEAorig + 11,
-         PFHXStrans.tmp = PFHXSorig +  11,
-         PFNAtrans.tmp = PFNAorig + 11, 
-         PFUAtrans.tmp = PFUAorig + 11,
-         SbPFOAtrans.tmp = SbPFOAorig + 11,
-         SmPFOStrans.tmp = SmPFOSorig + 11) %>%
-  mutate(PFOSAtrans = transformTukey(PFOSAtrans.tmp, plotit = F, quiet = T),
-         nPFOAtrans = transformTukey(nPFOAtrans.tmp, plotit = F, quiet = T),
-         nPFOStrans = transformTukey(nPFOStrans.tmp, plotit = F, quiet = T),
-         PFDEAtrans = transformTukey(PFDEAtrans.tmp, plotit = F, quiet = T),
-         PFHXStrans = transformTukey(PFHXStrans.tmp, plotit = F, quiet = T),
-         PFNAtrans = transformTukey(PFNAtrans.tmp, plotit = F, quiet = T),
-         PFUAtrans = transformTukey(PFUAtrans.tmp, plotit = F, quiet = T),
-         SbPFOAtrans = transformTukey(SbPFOAtrans.tmp, plotit = F, quiet = T),
-         SmPFOStrans = transformTukey(SmPFOStrans.tmp, plotit = F, quiet = T)) %>%
-  mutate_at(vars(contains("trans")), funs(base = ifelse(Status ==  'Recruit', ., NA))) %>%
-    mutate(str.duration.hrs = str.duration/60,
-         total.duration.hrs = total.duration/60) %>%
-  filter(Gender == "Male") 
-
-# Note this for defining your lambdas if we use them again.
-PFOSAlambda <- as.numeric(transformTukey(base.PFAS$PFOSAtrans.tmp, plotit = F, quiet = T, returnLambda = T)) 
-nPFOAlambda <- as.numeric(transformTukey(base.PFAS$nPFOAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
-nPFOSlambda <- as.numeric(transformTukey(base.PFAS$nPFOStrans.tmp, plotit = F, quiet = T, returnLambda = T))
-PFDEAlambda <- as.numeric(transformTukey(base.PFAS$PFDEAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
-PFHXSlambda <- as.numeric(transformTukey(base.PFAS$PFHXStrans.tmp, plotit = F, quiet = T, returnLambda = T))
-PFNAlambda <- as.numeric(transformTukey(base.PFAS$PFNAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
-PFUAlambda <- as.numeric(transformTukey(base.PFAS$PFUAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
-SbPFOAlambda <- as.numeric(transformTukey(base.PFAS$SbPFOAtrans.tmp, plotit = F, quiet = T, returnLambda = T))
-SmPFOSlambda <- as.numeric(transformTukey(base.PFAS$SmPFOStrans.tmp, plotit = F, quiet = T, returnLambda = T))
-
-# #check that base variable and orig variable are identical
-# base.check <- base.PFAS %>%
-#   filter(Status == 'Recruit') #identical checks TRUE for all
-
-                                
-
-
-```
-
 
 ```{r Sensitivity model functions, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", eval = F}
 
@@ -4376,7 +4414,6 @@ sens_ageBMI_fxn <- function(df, pfas, pfas.trans, fire.var) {
 
 ```{r baseline PFAS sensitivity model loop, results = "asis", eval = F}
 
-#assuming we won't use time sine baseline, days since MRF, or days since structural MRF since our outcome variable is baseline PFAS
 
 base_PFAS_fxn <-  function(dta, orig_outcome, trans_outcome, orig_base, exp_outcome) {
   orig_base_statement <- paste0("model_orig <- lm(", orig_outcome,
@@ -4389,7 +4426,7 @@ base_PFAS_fxn <-  function(dta, orig_outcome, trans_outcome, orig_base, exp_outc
               model_trans = model_trans)
 }
 
-analytes <- c("PFOSA", "nPFOA", "nPFOS", "PFDEA", "PFHXS", "PFNA", "PFUA", "SbPFOA", "SmPFOS")
+analytes <- c("nPFOA", "nPFOS", "PFDEA", "PFHXS", "PFNA", "SmPFOS")
 exposures <- c("total.num.fireruns", "str.num.fireruns", "total.duration.hrs", "str.duration.hrs",
                "days.since.MRF", "days.since.struc.MRF", "time.since.baseline")
 model_list <- list()
