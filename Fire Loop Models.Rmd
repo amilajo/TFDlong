@@ -1,7 +1,7 @@
 ---
-title: "TFD longitudinal analyses"
+title: "TFD PFAS Longitudinal Analyses"
 author: "Amy Nematollahi and Julia Fisher"
-date: "8/4/2020"
+date: "8/10/2020"
 output:
   pdf_document: default
   word_document: default
@@ -360,27 +360,17 @@ TFDtuk <- TFDlong %>%
          PFUAorig = PFUA,
          SbPFOAorig = SbPFOA,
          SmPFOSorig = SmPFOS) %>%
-  mutate(PFOSA = transformTukey(PFOSA)) %>% #lambda = -1.55
-  mutate(nPFOA = transformTukey(nPFOA)) %>% #lambda = -0.4
-  mutate(nPFOS = transformTukey(nPFOS)) %>% #lambda = -0.675
-  mutate(PFDEA = transformTukey(PFDEA)) %>% #lambda = -0.3
-  mutate(PFHXS = transformTukey(PFHXS)) %>% #lambda = -0.15
-  mutate(PFNA = transformTukey(PFNA)) %>% #lambda = -0.325
-  mutate(PFUA = transformTukey(PFUA)) %>% #lambda = -1.325
-  mutate(SbPFOA = transformTukey(SbPFOA)) %>% #lambda = -1.95
-  mutate(SmPFOS = transformTukey(SmPFOS)) %>% #lambda = -0.5
+  mutate(PFOSA = transformTukey(PFOSA)) %>% 
+  mutate(nPFOA = transformTukey(nPFOA)) %>% 
+  mutate(nPFOS = transformTukey(nPFOS)) %>% 
+  mutate(PFDEA = transformTukey(PFDEA)) %>% 
+  mutate(PFHXS = transformTukey(PFHXS)) %>% 
+  mutate(PFNA = transformTukey(PFNA)) %>% 
+  mutate(PFUA = transformTukey(PFUA)) %>% 
+  mutate(SbPFOA = transformTukey(SbPFOA)) %>% 
+  mutate(SmPFOS = transformTukey(SmPFOS)) %>% 
   mutate(SubjectID = as.factor(SubjectID)) 
 
-
-# PFOSA.lambda <- -1.55
-# nPFOA.lambda <- -0.4
-# nPFOS.lambda <- -0.675
-# PFDEA.lambda <- -0.3
-# PFHXS.lambda <- -0.15
-# PFNA.lambda <- -0.325
-# PFUA.lambda <- -1.325
-# SbPFOA.lambda <- -1.95
-# SmPFOS.lambda <- -0.5
   
 #   if (lambda >  0){TRANS = x ^ lambda}
 # if (lambda == 0){TRANS = log(x)} 
@@ -1405,7 +1395,7 @@ abline(h = 0)
 ```{r dataframe for Julia - logistical models, eval = F}
 
 TFDlong.logistical <- FireTuk %>%
-  dplyr::select(SubjectID, Status, Gender, Ethnicity, BMI, PFOSAorig, PFUAorig, SbPFOAorig,
+  dplyr::select(SubjectID, Status, Gender, Age, Ethnicity, BMI, PFOSAorig, PFUAorig, SbPFOAorig,
                 time.since.baseline, days.since.MRF, str.duration, str.num.fireruns, days.since.struc.MRF, 
                 total.duration, total.num.fireruns) %>%
   mutate(str.duration.hrs = str.duration/60,
@@ -1781,6 +1771,18 @@ mean.change <- data.frame(Ethnicity = as.character(),
                           analyte = as.character(),
                           stringsAsFactors = FALSE)
 
+mean.change <- data.frame(Ethnicity = as.character(),
+                           back.trans = as.numeric(), 
+                          lower.CL.back.trans = as.numeric(),
+                          upper.CL.back.trans = as.numeric(),
+                          emmean = as.numeric(),
+                          lower.CL = as.numeric(),
+                          upper.CL = as.numeric(),
+                          exposure = as.character(), 
+                          analyte = as.character(),
+                          back.trans.orig = as.numeric(),
+                          stringsAsFactors = FALSE)
+
 for (analyte in analytes) {
   for (exposure in exposures) {
   orig_var <- paste0(analyte, "orig")
@@ -1850,50 +1852,6 @@ true.mean <- mean.change %>%
 
 
 ```
-
-
-```{r change_score_plots, eval = F}
-
-# !PFOSA, PFUA, Sb-PFOA
-ggplot(FireChange2, aes(x = nPFOAorig)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = nPFOAtrans)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = nPFOSorig)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = nPFOStrans)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = PFDEAorig)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = PFDEAtrans)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = PFHXSorig)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = PFHXStrans)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = PFNAorig)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = PFNAtrans)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = SmPFOSorig)) +
-  geom_density() +
-  geom_rug()
-ggplot(FireChange2, aes(x = SmPFOStrans)) +
-  geom_density() +
-  geom_rug()
-
-```
-
 
 ```{r cooks distance function}
 
@@ -1976,17 +1934,36 @@ fbetas_plot <- function(mdl, st, t = 'one') { #added subtitle (st) for printing 
 
 ```
 
+## Overview
+
+In these analyses, we are examining change scores of PFAS serum levels in recruit firefighters from baseline to follow-up. For each model, we adjusted for ethnicity in addition to unique combinations of 6 PFAS types (nPFOA, nPFOS, PFHXS, PFNA, PFDEA, and SmPFOS) and 7 fire exposure variables (total number of fireruns, total number of structural fireruns, days since baseline PFAS measurement, days since most recent firerun, days since most recent structural firerun, total duration of all fireruns, and total duration of structural fireruns). In this document, the fitness of each original model (PFAS ~ exposure + ethnicity) is being compared to models in which our PFAS outcome is Tukey transformed. We produced cooks distance and DFBETA plots to identify influential points. For models with influential points, we are also comparing results with those points removed from those models. In short, we produced four models for each PFAS/fire exposure combination: 1) original PFAS change score values, 2) original with influential points removed, 3) transformed PFAS change score values, and 4) transformed with influential points removed. 
+
 ```{r change function, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11}
 
 
-knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
+knitr::opts_template$set("kill_prefix" = list(comment = NA, null_prefix = TRUE))
 
-pfas.list <-  c("PFOSAorig", "nPFOAorig", "nPFOSorig", "PFDEAorig", "PFHXSorig", "PFNAorig", "PFUAorig", 
-                "SbPFOAorig", "SmPFOSorig")
-pfastrans.list <- c("PFOSAtrans", "nPFOAtrans", "nPFOStrans", "PFDEAtrans", "PFHXStrans",
-              "PFNAtrans", "PFUAtrans", "SbPFOAtrans", "SmPFOStrans")
+pfas.list <-  c("nPFOAorig", "nPFOSorig", "PFDEAorig", "PFHXSorig", "PFNAorig",  "SmPFOSorig")
+pfastrans.list <- c("nPFOAtrans", "nPFOStrans", "PFDEAtrans", "PFHXStrans",
+              "PFNAtrans", "SmPFOStrans")
 fire.list <-  c("total.num.fireruns", "str.num.fireruns", "total.duration.hrs", "str.duration.hrs",
                "days.since.MRF", "days.since.struc.MRF", "time.since.baseline")
+
+model_list1 <- list()
+model_list2 <- list()
+model_list3 <- list()
+
+exp_fxn <-  function(dta, orig_outcome, trans_outcome, exp_outcome) {
+  orig_model_statement <- paste0("model_orig <- lm(", orig_outcome,
+                                 " ~ ", exp_outcome, " + Ethnicity, data = dta)")
+  eval(parse(text = orig_model_statement))
+  trans_model_statement <- paste0("model_trans <- lm(", trans_outcome,
+                                 " ~ ", exp_outcome, " + Ethnicity, data = dta)")
+  eval(parse(text = trans_model_statement))
+  out <- list(model_orig = model_orig,
+              model_trans = model_trans)
+}
+
 
 change_plot_fxn <- function(df, pfas, pfas.trans, fire.var) {
   pfas_orig <- paste0("pfasmdl <- lm(", pfas, " ~ ", fire.var, " + Ethnicity, data = df)")
@@ -1997,165 +1974,480 @@ change_plot_fxn <- function(df, pfas, pfas.trans, fire.var) {
               transmdl = transmdl)
 }
 
+mean.change1 <- data.frame(Ethnicity = as.character(),
+                           back.trans = as.numeric(), 
+                          lower.CL.back.trans = as.numeric(),
+                          upper.CL.back.trans = as.numeric(),
+                          emmean = as.numeric(),
+                          lower.CL = as.numeric(),
+                          upper.CL = as.numeric(),
+                          exposure = as.character(), 
+                          analyte = as.character(),
+                          back.trans.orig = as.numeric(),
+                          stringsAsFactors = FALSE)
+
+  #function to compare transformed/outliers removed
+  compare_fxn <- function(df, pfas.name, Tpfas.name, fire.var, orig.indices, trans.indices) {
+  pfas_orig <- paste0("pfasmdl <- lm(", pfas.name, " ~ ", fire.var, " + Ethnicity, data = df)")
+  eval(parse(text = pfas_orig))
+  if (length(orig.indices > 0)){
+    # print('triggered original removal')
+    pfas_orig_rm <- paste0("pfasmdl.rm <- lm(", pfas.name, " ~ ", fire.var, " + Ethnicity, data = df %>% .[-orig.indices, ])")
+    eval(parse(text = pfas_orig_rm))
+  } else {
+    pfasmdl.rm = "No points removed"
+  }
+   pfas_trans <- paste0("transmdl <- lm(", Tpfas.name, " ~ ", fire.var, " + Ethnicity, data = df)")
+  eval(parse(text = pfas_trans))
+  if (length(trans.indices > 0)){
+     # print('triggered trans removal')
+    pfas_trans_rm <- paste0("transmdl.rm <- lm(", Tpfas.name, " ~ ", fire.var, " + Ethnicity, data = df %>% .[-trans.indices, ])")
+    eval(parse(text = pfas_trans_rm))
+  } else {
+    transmdl.rm = "No points removed"
+  }
+  out <- list(pfasmdl = pfasmdl,
+              transmdl = transmdl,
+              pfasmdl.rm = pfasmdl.rm,
+              transmdl.rm = transmdl.rm)
+  }
+
 for (i in 1:length(pfas.list)) {
   pfas.name <- pfas.list[i]
   Tpfas.name <- pfastrans.list[i]
+  model_list1[[pfas.name]] <- list() 
+  model_list2[[Tpfas.name]] <- list()
+print(pfas.name)
   for (fire.var in fire.list) {
+    print(fire.var)
     out_info <- change_plot_fxn(FireChange2, pfas.name, Tpfas.name, fire.var)
+    out_info2 <- exp_fxn(FireChange2, pfas.name, Tpfas.name, fire.var)
+    model_list1[[pfas.name]][[fire.var]] <- out_info
+    model_list2[[Tpfas.name]][[fire.var]] <- out_info2
+    meanNH <-  mean(FireChange2 %>% filter(Ethnicity== 'Non-hispanic') %>% .[, fire.var], na.rm = TRUE)
+    meanH <-  mean(FireChange2 %>% filter(Ethnicity== 'Hispanic') %>% .[, fire.var], na.rm = TRUE)
+    NH.mean.change <- eval(parse(text = paste0("emmeans(model_list1[[pfas.name]][[fire.var]]$pfasmdl, 'Ethnicity', at = list(", fire.var, " = meanNH))"))) %>%
+      summary() %>%
+      filter(Ethnicity == "Non-hispanic")
+    H.mean.change <- eval(parse(text = paste0("emmeans(model_list1[[pfas.name]][[fire.var]]$pfasmdl, 'Ethnicity', at = list(", fire.var, " = meanH))"))) %>%
+      summary() %>%
+      filter(Ethnicity == "Hispanic")
+    NH.mean.changeT <- eval(parse(text = paste0("emmeans(model_list2[[Tpfas.name]][[fire.var]]$model_trans, 'Ethnicity', at = list(", fire.var, " = meanNH))"))) %>%
+      summary() %>%
+      filter(Ethnicity == "Non-hispanic")
+        H.mean.changeT <- eval(parse(text = paste0("emmeans(model_list2[[Tpfas.name]][[fire.var]]$model_trans, 'Ethnicity', at = list(", fire.var, " = meanH))"))) %>%
+      summary() %>%
+      filter(Ethnicity == "Hispanic")
+    mean.change1 <- rbind(mean.change1,
+                         rbind(H.mean.change, NH.mean.change, H.mean.changeT, NH.mean.changeT) %>%
+                           mutate(exposure = fire.var,
+                                  analyte = pfas.name) %>%
+                           dplyr::select(-SE, -df))
     
-    #FItted vs. residuals 
-    orig.resid<- ggplot(data.frame(resid = resid(out_info$pfasmdl), 
-                                   fitted = fitted(out_info$pfasmdl)), 
-                        aes(x = fitted, y = resid)) +
+    
+#Cooks distance plots
+cd.plot.orig <-  cooks_distance_plot(out_info$pfasmdl, 
+                                     paste0(out_info$pfasmdl$terms[[2]], ": ",
+                                            out_info$pfasmdl$terms[[3]][2], " original values"))
+
+cd.plot.trans <- cooks_distance_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
+                                                               out_info$transmdl$terms[[3]][2], " transformed values"))
+
+cd.table <- data.frame(orig.indices = paste0(cd.plot.orig$problem_indices, collapse = ", "),
+                       trans.indices = paste0(cd.plot.trans$problem_indices, collapse = ", ")) %>%
+  rename(`Orig Model Pts` = orig.indices,
+         `Trans Model Pts` = trans.indices) %>%
+ggtexttable(rows = NULL, theme = ttheme("lBlack"))
+  # tableGrob(theme = ttheme_minimal(), rows = NULL)
+
+
+#compare fxn output
+orig.indices <- cd.plot.orig$problem_indices
+trans.indices <- cd.plot.trans$problem_indices
+model_list3[[fire.var]] <- list()
+out_info4 <- compare_fxn(FireChange2, pfas.name, Tpfas.name, fire.var, orig.indices, trans.indices)
+model_list3[[pfas.name]][[fire.var]] <- out_info4
+
+
+if(!is.character(out_info4$pfasmdl.rm)){
+  cd.plot.orig.rm <-  cooks_distance_plot(out_info4$pfasmdl.rm, 
+                                          paste0(out_info4$pfasmdl.rm$terms[[2]], ": ",
+                                                 out_info4$pfasmdl.rm$terms[[3]][2], " Infl pts rmvd"))
+} else {
+  cd.plot.orig.rm = NULL 
+}
+
+if(!is.character(out_info4$transmdl.rm)){
+  cd.plot.trans.rm <- cooks_distance_plot(out_info4$transmdl.rm, paste0(out_info4$transmdl.rm$terms[[2]], ": ", out_info4$transmdl.rm$terms[[3]][2], " Infl pts rmvd"))
+} else {
+  cd.plot.trans.rm = NULL
+}
+
+cd.table2 <- data.frame(orig.indices = paste0(cd.plot.orig.rm$problem_indices, collapse = ", "),
+                       trans.indices = paste0(cd.plot.trans.rm$problem_indices, collapse = ", ")) %>%
+  rename(`Orig-rmvd Pts` = orig.indices,
+         `Trans-rmvd Pts` = trans.indices) %>%
+ggtexttable(rows = NULL, theme = ttheme("lBlack"))
+  # tableGrob(theme = ttheme_minimal(), rows = NULL)
+
+#DFBETA plots
+fbeta1 <- fbetas_plot(out_info4$pfasmdl, paste0(out_info4$pfasmdl$terms[[2]], ": ",
+                                                     out_info4$pfasmdl$terms[[3]][2]))
+
+if(!is.character(out_info4$pfasmdl.rm)){
+  fbeta2 <- fbetas_plot(out_info4$pfasmdl.rm, paste0(out_info4$pfasmdl$terms[[2]], ": ",
+                                                     out_info4$pfasmdl$terms[[3]][2], " infl pts rmvd")) 
+} else {
+  fbeta2 = NA
+}
+
+fbeta3 <- fbetas_plot(out_info4$transmdl, paste0(out_info4$transmdl$terms[[2]], ": ",
+                                                      out_info4$transmdl$terms[[3]][2]))
+
+if(!is.character(out_info4$transmdl.rm)){
+  fbeta4 <- fbetas_plot(out_info4$transmdl.rm, paste0(out_info4$transmdl.rm$terms[[2]], ": ",
+                                                      out_info4$transmdl.rm$terms[[3]][2], " infl pts rmvd")) 
+} else {
+  fbeta4 = NA
+}
+
+if(!is.character(out_info4$transmdl.rm) & (!is.na(fbeta2))){
+  beta.table <- data.frame(Parameter = c('Intercept', 
+                                         'Intercept - Points Removed', 
+                                         'Exposure', 
+                                         'Exposure - Points Removed', 
+                                         'Ethnicity Hispanic', 
+                                         'Ethnicity Hispanic - Points Removed'),
+                           `Original Model Indices` = 
+                             c(paste0(fbeta1$`(Intercept)`$problem_indices, collapse = ", "),
+                               paste0(fbeta3$`(Intercept)`$problem_indices, collapse = ", "),
+                               paste0(fbeta1$`[[2]][1]`$problem_indices, collapse = ", "),
+                               paste0(fbeta3$`[[2]][1]`$problem_indices, collapse = ", "),
+                               paste0(fbeta1$EthnicityHispanic$problem_indices, collapse = ", "),
+                               paste0(fbeta3$EthnicityHispanic$problem_indices, collapse = ", ")),
+                           `Transformed Model Indices` = 
+                             c(paste0(fbeta2$`(Intercept)`$problem_indices, collapse = ", "),
+                               paste0(fbeta4$`(Intercept)`$problem_indices, collapse = ", "),
+                               paste0(fbeta2$`[[2]][1]`$problem_indices, collapse = ", "),
+                               paste0(fbeta4$`[[2]][1]`$problem_indices, collapse = ", "),
+                               paste0(fbeta2$EthnicityHispanic$problem_indices, collapse = ", "),
+                               paste0(fbeta4$EthnicityHispanic$problem_indices, collapse = ", "))) 
+     # ggtexttable(rows = NULL, theme = ttheme("lBlack"))
+     # tableGrob(theme = ttheme("lBlack"), rows = NULL))
+}
+
+    
+#FItted vs. residuals 
+  orig.resid<- ggplot(data.frame(resid = resid(out_info4$pfasmdl), 
+                                 fitted = fitted(out_info4$pfasmdl)), 
+                      aes(x = fitted, y = resid)) +
+    geom_point(size = 2) +
+    geom_hline(yintercept = 0) +
+    theme(axis.text = element_text(size = 10),
+          plot.title = element_text(hjust = 0.5)) +  
+    labs(title = paste0(out_info4$pfasmdl$terms[[2]], ": ",
+                        out_info4$pfasmdl$terms[[3]][2]))
+  
+  if(!is.character(out_info4$pfasmdl.rm)){
+    orig.resid.rm<-  ggplot(data.frame(resid = resid(out_info4$pfasmdl.rm), 
+                                       fitted = fitted(out_info4$pfasmdl.rm)), 
+                            aes(x = fitted, y = resid)) +
       geom_point(size = 2) +
       geom_hline(yintercept = 0) +
       theme(axis.text = element_text(size = 10),
             plot.title = element_text(hjust = 0.5)) +  
-      labs(title = paste0(out_info$pfasmdl$terms[[2]], ": ",
-                          out_info$pfasmdl$terms[[3]][2]))
-    trans.resid <- ggplot(data.frame(resid = resid(out_info$transmdl), 
-                                     fitted = fitted(out_info$transmdl)), 
-                          aes(x = fitted, y = resid)) +
+      labs(title = paste0(out_info4$pfasmdl.rm$terms[[2]], ": ",
+                          out_info4$pfasmdl.rm$terms[[3]][2], " infl pts rmvd"))
+  } else {
+    orig.resid.rm = "No points removed" %>%
+      ggtexttable(., rows = NULL, theme = ttheme("lBlack"))
+  }
+
+  trans.resid <- ggplot(data.frame(resid = resid(out_info4$transmdl), 
+                                   fitted = fitted(out_info4$transmdl)), 
+                        aes(x = fitted, y = resid)) +
+    geom_point(size = 2) +
+    geom_hline(yintercept = 0) +
+    theme(axis.text = element_text(size = 10),
+          plot.title = element_text(hjust = 0.5)) +
+    labs(title = paste0(out_info4$transmdl$terms[[2]], ": ",
+                        out_info4$pfasmdl$terms[[3]][2])) 
+
+  if (!is.character(out_info4$transmdl.rm)){
+    trans.resid.rm <-  ggplot(data.frame(resid = resid(out_info4$transmdl.rm), 
+                                         fitted = fitted(out_info4$transmdl.rm)), 
+                              aes(x = fitted, y = resid)) +
       geom_point(size = 2) +
       geom_hline(yintercept = 0) +
       theme(axis.text = element_text(size = 10),
             plot.title = element_text(hjust = 0.5)) +
-      labs(title = paste0(out_info$transmdl$terms[[2]], ": ",
-                          out_info$pfasmdl$terms[[3]][2])) 
-    
-    ys.orig <- quantile(qqnorm(resid(out_info$pfasmdl), plot.it = F)$y, probs = c(0.25, 0.75),
-                        qtype = 7)
-    xs.orig <- quantile(qqnorm(resid(out_info$pfasmdl), plot.it = F)$x, probs = c(0.25, 0.75),
-                        qtype = 7)
-    m.orig <- (ys.orig[2] - ys.orig[1])/(xs.orig[2] - xs.orig[1])
-    b.orig <- ys.orig[2] - m.orig*xs.orig[2]
-    
-    ys.trans <- quantile(qqnorm(resid(out_info$transmdl), plot.it = F)$y, 
-                         probs = c(0.25, 0.75), qtype = 7)
-    xs.trans <- quantile(qqnorm(resid(out_info$transmdl), plot.it = F)$x, probs = c(0.25, 0.75), 
-                         qtype = 7)
-    m.trans <- (ys.trans[2] - ys.trans[1])/(xs.trans[2] - xs.trans[1])
-    b.trans <- ys.trans[2] - m.trans*xs.trans[2]
-   
-  assumptions.df <- data.frame(orig_qq_theor = qqnorm(resid(out_info$pfasmdl), plot.it = F)$x,
-                               orig_qq_samp = qqnorm(resid(out_info$pfasmdl), plot.it = F)$y,
-                                                              stringsAsFactors = F)
-  
-  assumptions.df.t <- data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl), 
-                                                         plot.it = F)$x,
-                               trans_qq_samp = qqnorm(resid(out_info$transmdl), plot.it = F)$y,
-                                                              stringsAsFactors = F)
+      labs(title = paste0(out_info4$transmdl.rm$terms[[2]], ": ",
+                          out_info4$transmdl.rm$terms[[3]][2], " infl pts rmvd")) 
+  } else {
+    trans.resid.rm = "No points removed"
+  }
+
+ys.orig <- quantile(qqnorm(resid(out_info$pfasmdl), plot.it = F)$y, probs = c(0.25, 0.75),
+                    qtype = 7)
+xs.orig <- quantile(qqnorm(resid(out_info$pfasmdl), plot.it = F)$x, probs = c(0.25, 0.75),
+                    qtype = 7)
+m.orig <- (ys.orig[2] - ys.orig[1])/(xs.orig[2] - xs.orig[1])
+b.orig <- ys.orig[2] - m.orig*xs.orig[2]
+
+if(!is.character(out_info4$pfasmdl.rm)){
+  ys.orig.rm <-   quantile(qqnorm(resid(out_info4$pfasmdl.rm), plot.it = F)$y, probs = c(0.25, 0.75),
+                           qtype = 7) 
+} else {
+  ys.orig.rm = NA
+}
+
+if(!is.character(out_info4$pfasmdl.rm)){
+  xs.orig.rm <-- quantile(qqnorm(resid(out_info4$pfasmdl.rm), plot.it = F)$x, probs = c(0.25, 0.75),
+                          qtype = 7) 
+} else {
+  xs.orig.rm = NA
+}
+
+if (!is.character(out_info4$pfasmdl.rm)){
+  m.orig.rm <-  (ys.orig.rm[2] - ys.orig.rm[1])/(xs.orig.rm[2] - xs.orig.rm[1]) 
+} else {
+  m.orig.rm = NA
+}
+
+if (!is.character(out_info4$pfasmdl.rm)){
+  b.orig.rm <- ys.orig.rm[2] - m.orig.rm*xs.orig.rm[2]
+} else {
+  b.orig.rm = NA
+}
+
+ys.trans <- quantile(qqnorm(resid(out_info4$transmdl), plot.it = F)$y, 
+                     probs = c(0.25, 0.75), qtype = 7)
+xs.trans <- quantile(qqnorm(resid(out_info4$transmdl), plot.it = F)$x, probs = c(0.25, 0.75), 
+                     qtype = 7)
+m.trans <- (ys.trans[2] - ys.trans[1])/(xs.trans[2] - xs.trans[1])
+b.trans <- ys.trans[2] - m.trans*xs.trans[2]
+
+if (!is.character(out_info4$transmdl.rm)){
+  ys.trans.rm <- quantile(qqnorm(resid(out_info4$transmdl.rm), plot.it = F)$y, probs = c(0.25, 0.75),
+                          qtype = 7) 
+} else {
+  ys.trans.rm = NA
+}
+
+if (!is.character(out_info4$transmdl.rm)){
+  xs.trans.rm <-  quantile(qqnorm(resid(out_info4$transmdl.rm), plot.it = F)$x, probs = c(0.25, 0.75),
+                           qtype = 7) 
+} else {
+  xs.trans.rm = NA
+}
+
+if (!is.character(out_info4$transmdl.rm)){
+  m.trans.rm <-  (ys.trans.rm[2] - ys.trans.rm[1])/(xs.trans.rm[2] - xs.trans.rm[1]) 
+} else {
+  m.trans.rm = NA
+}
+
+if (!is.character(out_info4$transmdl.rm)){
+  b.trans.rm <-  ys.trans.rm[2] - m.trans.rm*xs.trans.rm[2]
+} else {
+  b.trans.rm = NA
+}
+
+assumptions.df <- data.frame(orig_qq_theor = qqnorm(resid(out_info4$pfasmdl), plot.it = F)$x,
+                             orig_qq_samp = qqnorm(resid(out_info4$pfasmdl), plot.it = F)$y,
+                             stringsAsFactors = F)
+
+if (!is.character(out_info4$pfasmdl.rm)){
+  assumptions.df.rm <-  data.frame(orig_qq_theor.rm = qqnorm(resid(out_info4$pfasmdl.rm), plot.it = F)$x,
+                                  orig_qq_samp.rm = qqnorm(resid(out_info4$pfasmdl.rm), plot.it = F)$y,
+                                  stringsAsFactors = F) 
+} else {
+  assumptions.df.rm = NA
+}
+
+assumptions.df.t <- data.frame(trans_qq_theor = qqnorm(resid(out_info4$transmdl), plot.it = F)$x,
+                               trans_qq_samp = qqnorm(resid(out_info4$transmdl), plot.it = F)$y,
+                               stringsAsFactors = F)
+
+if (!is.character(out_info4$transmdl.rm)){
+  assumptions.df.t.rm <-  data.frame(trans_qq_theor.rm = 
+                                       qqnorm(resid(out_info4$transmdl.rm), plot.it = F)$x,
+                                     trans_qq_samp.rm = 
+                                       qqnorm(resid(out_info4$transmdl.rm), plot.it = F)$y,
+                                     stringsAsFactors = F)
+} else {
+  assumptions.df.t.rm = "No points removed"
+}
 
 qq.plot.orig <- ggplot(assumptions.df, aes(x = orig_qq_theor, y = orig_qq_samp)) +
-    geom_point() + 
+  geom_point() + 
+  geom_abline(intercept = b.orig, slope = m.orig) +
+  labs(x = "Theoretical Quantiles",
+       y = "Sample Quantiles",
+       title = paste0(out_info4$pfasmdl$terms[[2]], ": ",
+                      out_info4$pfasmdl$terms[[3]][2]))  +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
+        axis.title = element_text(size = 10))
+
+if(!is.character(out_info4$pfasmdl.rm)){
+  qq.plot.orig.rm <-  ggplot(assumptions.df.rm, aes(x = orig_qq_theor.rm, y = orig_qq_samp.rm)) +
+    geom_point() +
     geom_abline(intercept = b.orig, slope = m.orig) +
     labs(x = "Theoretical Quantiles",
          y = "Sample Quantiles",
-         title = paste0(out_info$pfasmdl$terms[[2]], ": ",
-                          out_info$pfasmdl$terms[[3]][2]))  +
+         title = paste0(out_info4$pfasmdl.rm$terms[[2]], ": ",
+                        out_info4$pfasmdl.rm$terms[[3]][2], " infl pts rmvd"))  +
     theme(plot.title = element_text(hjust = 0.5, size = 10),
           axis.title = element_text(size = 10))
+} else {
+  qq.plot.orig.rm = "No points removed"
+}
 
-qq.plot.trans <- ggplot(assumptions.df.t, aes(x = trans_qq_theor, y = trans_qq_samp)) +
-    geom_point() + 
+qq.plot.trans <-  ggplot(assumptions.df.t, aes(x = trans_qq_theor, y = trans_qq_samp)) +
+  geom_point() + 
+  geom_abline(intercept = b.trans, slope = m.trans) +
+  labs(x = "Theoretical Quantiles",
+       y = "Sample Quantiles",
+       title = paste0(out_info4$transmdl$terms[[2]], ": ",
+                      out_info4$transmdl$terms[[3]][2]))  + 
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
+        axis.title = element_text(size = 10)) 
+
+if(!is.character(out_info4$transmdl.rm)){
+  qq.plot.trans.rm <- ggplot(assumptions.df.t.rm, aes(x = trans_qq_theor.rm, y = trans_qq_samp.rm)) +
+    geom_point() +
     geom_abline(intercept = b.trans, slope = m.trans) +
     labs(x = "Theoretical Quantiles",
          y = "Sample Quantiles",
-         title = paste0(out_info$transmdl$terms[[2]], ": ",
-                          out_info$transmdl$terms[[3]][2]))  + 
+         title = paste0(out_info4$transmdl.rm$terms[[2]], ": ",
+                        out_info4$transmdl.rm$terms[[3]][2], " infl pts rmvd"))  +
     theme(plot.title = element_text(hjust = 0.5, size = 10),
-          axis.title = element_text(size = 10))
+          axis.title = element_text(size = 10)) 
+} else {
+  qq.plot.trans.rm = "No points removed"
+}
 
-#Cooks distance plots
+plotlist.resid.qq <- list(orig.resid, orig.resid.rm,
+                          trans.resid, trans.resid.rm,
+                          qq.plot.orig, qq.plot.orig.rm,
+                          qq.plot.trans, qq.plot.trans.rm)
 
+plotlist.cd <- list(cd.plot.orig$plot, cd.plot.trans$plot)
 
-cd.plot.orig <-  cooks_distance_plot(out_info$pfasmdl, 
-                                     paste0(out_info$pfasmdl$terms[[2]], ": ",
-                                            out_info$pfasmdl$terms[[3]][2]))
+if(!is.character(out_info4$transmdl.rm)){
+  plotlist.cd.rm <-  list(cd.plot.orig.rm$plot, cd.plot.trans.rm$plot)}
 
-cd.plot.trans <- cooks_distance_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
-                                                               out_info$transmdl$terms[[3]][2]))
+if(!is.na(fbeta1) & !is.character(fbeta3)){
+plotlist.beta1 <- list(fbeta1$`(Intercept)`$plot, fbeta3$`(Intercept)`$plot, 
+                   fbeta1$EthnicityHispanic$plot, fbeta3$EthnicityHispanic$plot, 
+                   fbeta1[[2]][1]$plot, fbeta3[[2]][1]$plot)
+}
 
-cd.table <- data.frame(Original.indices = as.numeric(),
-                       Transformed.indices = as.numeric())
+if(!is.na(fbeta2) & !is.na(fbeta4)){
+  plotlist.beta2<-  list(fbeta2$`(Intercept)`$plot, fbeta4$`(Intercept)`$plot, 
+                      fbeta2$EthnicityHispanic$plot, fbeta4$EthnicityHispanic$plot, 
+                      fbeta2[[2]][1]$plot, fbeta4[[2]][1]$plot)
+}
 
-cd.table2 <- rbind(as.numeric(cd.plot.orig$problem_indices[1]), as.numeric(cd.plot.trans$problem_indices[1]), 
-                   na.rm = FALSE) 
+exposure.df <-  data.frame(var = c('time.since.baseline', 
+                                   'days.since.MRF', 
+                                   'total.num.fireruns', 
+                                   'str.duration', 
+                                   'str.num.fireruns',
+                                   'days.since.struc.MRF',
+                                   'total.duration'), 
+                           var_name = c('Time Since Baseline (days)', 
+                                        'Days Since Most Recent Fire', 
+                                        'Total Number of Fireruns', 
+                                        'Duration of Structural Fireruns (hours)', 
+                                        'Total Number of Structural Fireruns',
+                                        'Days Since Most Recent Structural Fire',
+                                        'Total Duration of Fireruns (hours)'))
 
-cd.table3 <- rbind(cd.table, cd.table2)  %>%
-  mutate(Orig.indices = cd.plot.orig$problem_indices[1],
-         Trans.indices = cd.plot.trans$problem_indices[1]) %>%
-  dplyr::select(-V1) 
+stargazer(out_info4$pfasmdl,
+          out_info4$pfasmdl.rm,
+          out_info4$transmdl,
+          out_info4$transmdl.rm,
+          title = paste0(gsub("orig", " Change Score", pfas.name), " + ", 
+                         exposure.df[which(exposure.df$var ==  fire.var), "var_name"], " Models"),
+          single.row = FALSE, header = FALSE,
+              omit.stat = c("f", "ser"), report = "vctp*",
+              intercept.bottom = FALSE, intercept.top = TRUE,
+              digits = 3, font.size = "scriptsize",
+          column.labels = c("Orig outcome: all data",
+                            "Orig outcome: infl pts rmvd",
+                            "Trans Outcome: all data",
+                            "Trans Outcome: infl pts rmvd"))
 
-  cd.table4 <- cd.table3[-c(2, 3) , ]
-  cd.table5 <- ggtexttable(cd.table4, rows = NULL, theme = ttheme("blank"))
-
-
-
-
-#DFBETA plots
-
-fbeta1 <- fbetas_plot(out_info$pfasmdl, paste0(out_info$pfasmdl$terms[[2]], ": ",
-                                                     out_info$pfasmdl$terms[[3]][2]))
-fbeta2 <- fbetas_plot(out_info$transmdl, paste0(out_info$transmdl$terms[[2]], ": ",
-                                                      out_info$transmdl$terms[[3]][2]))
-
-
-  beta1 <- as.numeric(fbeta1$`(Intercept)`$problem_indices)
-  beta2 <- as.numeric(fbeta1$`[[2]][1]`$problem_indices)
-  beta3 <- as.numeric(fbeta1$EthnicityHispanic$problem_indices)
-  beta4 <- as.numeric(fbeta2$`(Intercept)`$problem_indices)
-  beta5 <- as.numeric(fbeta2$`[[2]][1]`$problem_indices)
-  beta6 <- as.numeric(fbeta2$EthnicityHispanic$problem_indices)
-  beta.out <- list(Intercept.indices.orig = as.numeric(beta1[1]),
-              Exposure.indices.orig  = as.numeric(beta2[1]),
-              EthnHisp.indices.orig = as.numeric(beta3[1]),
-              Intercept.indices.trans = as.numeric(beta4[1]),
-              Exposure.indices.trans  = as.numeric(beta5[1]),
-              EthnHisp.indices.trans = as.numeric(beta6[1]))
-  beta.out1 <- as.data.frame(beta.out)
-
-beta.table <- data.frame(Intercept.indices.orig = as.numeric(),
-                         Intercept.indices.trans = as.numeric(),
-                       Exposure.indices.orig = as.numeric(),
-                       Exposure.indices.trans = as.numeric(),
-                       EthnHisp.indices.orig = as.numeric(),
-                       EthnHisp.indices.trans = as.numeric())
-
-
-beta.table2 <- rbind(beta.table, beta.out1) %>%
-  gather(key = "variable", value = "value") %>%
-  rename(indices = value,
-         Model.terms = variable)
-
-beta.table3 <- ggtexttable(beta.table2, rows = NULL, theme = ttheme("blank"))
+p1 <- ggarrange(plotlist = plotlist.resid.qq, nrow = 4, ncol = 2)
 
 
-plotlist.a <- list(orig.resid, trans.resid, 
-                   qq.plot.orig, qq.plot.trans, 
-                   cd.plot.orig$plot,
-                   cd.plot.trans$plot, cd.table5)
+p2 <- ggarrange(plotlist = plotlist.cd, nrow = length(plotlist.cd),ncol = 1)
 
 
-plotlist.b <- list(fbeta1$`(Intercept)`$plot, fbeta2$`(Intercept)`$plot, 
-                   fbeta1$EthnicityHispanic$plot, fbeta2$EthnicityHispanic$plot, 
-                   fbeta1[[2]][1]$plot, fbeta2[[2]][1]$plot,
-                   beta.table3)
+if(!is.character(out_info4$pfasmdl.rm)){
+  p3 <- ggarrange(plotlist = plotlist.cd.rm , nrow = length(plotlist.cd.rm), ncol = 1)
+} else {
+  p3 = print("No influential points removed") %>%
+    ggtexttable(rows = NULL, theme = ttheme("lBlack"))
+}
 
-# cat(noquote(paste0("## ", out_info$pfasmdl$terms[[2]], ":", out_info$pfasmdl$terms[[3]][2], " - ",
-#                                       " Model Residuals and cooks distance plots and problem indices")))
+p4 <- list(cd.table, cd.table2)
 
-print(ggarrange(plotlist = plotlist.a, nrow = 4, ncol = 2))
+               
+p4a <- ggarrange(p2, p3, p4, nrow = 2, ncol = 2)
+
+# if(!is.character(out_info4$pfasmdl.rm)){
+#   p4b <- annotate_figure(p4a,
+#                          top = text_grob("Cooks Distance with Influential Points/Indices",
+#                                          size = 14, face = "bold"),
+#                          text_grob(paste0(out_info4$pfasmdl$terms[[2]], ": ",
+#                                           out_info4$pfasmdl$terms[[3]][2]), size = 14)) 
+# }else{
+# p4b = print("No influential points") %>%
+#   ggtexttable(rows = NULL, theme = ttheme("lBlack"))}
 
 
+p5 <- ggarrange(plotlist = plotlist.beta1, nrow = 3, ncol = 2)
 
-# cat(noquote(paste0("## ", out_info$pfasmdl$terms[[2]], ":", out_info$pfasmdl$terms[[3]][2], " - ",
-#                                       " DFBETA plots and problem indices")))
+# p5a <- annotate_figure(p5, top = text_grob(paste0("DFBETA plots: ",
+#                    out_info4$pfasmdl$terms[[2]], ": ",
+#                                    out_info4$pfasmdl$terms[[3]][2])))
 
-print(ggarrange(plotlist = plotlist.b, nrow = 4, ncol = 2))
+p6 <- ggarrange(plotlist = plotlist.beta2, nrow = 3, ncol = 2)
 
-    
+# p6a <- annotate_figure(p6, top = text_grob(paste0("DFBETA plots: ",
+#                    out_info4$transmdl$terms[[2]], ": ",
+#                                    out_info4$transmdl$terms[[3]][2])))
+
+
+# 
+# cat(noquote(paste0("## ", out_info4$pfasmdl$terms[[2]], ": ", out_info4$pfasmdl$terms[[3]][2], " - ",
+#                                       " Original + Transformed Model Residuals & QQ plots \n \n")))  
+print(p1)
+
+# cat(noquote(paste0("## ", out_info4$pfasmdl$terms[[2]], ": ", out_info4$pfasmdl$terms[[3]][2], " - ",
+#                                       " Original and Transformed Model: Cooks distance problem indices")))
+print(p4a)
+
+# cat(noquote(paste0("## ", out_info4$pfasmdl$terms[[2]], ":", out_info4$pfasmdl$terms[[3]][2], " - ",
+#                                       " Original models: DFBETA plot influential points")))
+print(p5)
+# 
+# cat(noquote(paste0("## ", out_info4$transmdl$terms[[2]], ":", out_info4$transmdl$terms[[3]][2], " - ",
+#                                       " Transformed models: DFBETA plots \n \n")))
+print(p6)
+
+if(!is.character(out_info4$transmdl.rm) & (!is.na(fbeta2))){
+print(grid.arrange(tableGrob(beta.table)))
+}else{
+  print("No influential DFBETA points") %>%
+    ggtexttable(rows = NULL, theme = ttheme("lBlack"))
+}
+
+
   }
+    
 }
 
 
@@ -2258,18 +2550,24 @@ compare_fxn <- function(df, fire.var) {
   assumptions.df <- data.frame(orig_qq_theor = qqnorm(resid(out_info$pfasmdl), plot.it = F)$x,
                                orig_qq_samp = qqnorm(resid(out_info$pfasmdl), plot.it = F)$y,
                                                               stringsAsFactors = F)
-  assumptions.df.rm <- data.frame(orig_qq_theor = qqnorm(resid(out_info$pfasmdl.rm), plot.it = F)$x,
+  assumptions.df.rm <- if (!is.character(out_info4$pfasmdl.rm)){
+    data.frame(orig_qq_theor.rm = qqnorm(resid(out_info$pfasmdl.rm), plot.it = F)$x,
                                orig_qq_samp = qqnorm(resid(out_info$pfasmdl.rm), plot.it = F)$y,
-                                                              stringsAsFactors = F)
+                                                              stringsAsFactors = F)} else {
+                                                               assumptions.df.rm = "No points removed" 
+                                                              }
   
   assumptions.df.t <- data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl), 
                                                          plot.it = F)$x,
                                trans_qq_samp = qqnorm(resid(out_info$transmdl), plot.it = F)$y,
                                                               stringsAsFactors = F)
-  assumptions.df.t.rm <- data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl.rm), 
+  assumptions.df.t.rm <- if(!is.character(out_info4$transmdl.rm)){
+    data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl.rm), 
                                                          plot.it = F)$x,
                                trans_qq_samp = qqnorm(resid(out_info$transmdl.rm), plot.it = F)$y,
-                                                              stringsAsFactors = F)
+                                                              stringsAsFactors = F) } else {
+                                                                assumptions.df.t.rm = "No points removed"
+                                                              }
 
 qq.plot.orig <- ggplot(assumptions.df, aes(x = orig_qq_theor, y = orig_qq_samp)) +
     geom_point() + 
@@ -2409,7 +2707,7 @@ stargazer(out_info$pfasmdl, out_info$pfasmdl.rm, out_info$trans.mdl, out_info$tr
 
 ```
 
-# nPFOA: structural number of fireruns and duration of structural fires\
+
 ```{r nPFOA/str.num.fireruns/str.duration.hrs model comaprisons, results = 'asis', echo = F, dev = c('pdf', 'png'), fig.path = "figure/", dpi = 300, fig.width = 8, fig.height = 11, eval = F}
 
 knitr::opts_template$set("kill_prefix"=list(comment=NA, null_prefix=TRUE))
@@ -2991,18 +3289,27 @@ compare_fxn <- function(df, fire.var) {
   assumptions.df <- data.frame(orig_qq_theor = qqnorm(resid(out_info$pfasmdl), plot.it = F)$x,
                                orig_qq_samp = qqnorm(resid(out_info$pfasmdl), plot.it = F)$y,
                                                               stringsAsFactors = F)
-  assumptions.df.rm <- data.frame(orig_qq_theor = qqnorm(resid(out_info$pfasmdl.rm), plot.it = F)$x,
+  assumptions.df.rm <- if (!is.character(out_info$pfasmdl.rm){
+    data.frame(orig_qq_theor.rm = qqnorm(resid(out_info$pfasmdl.rm), plot.it = F)$x,
                                orig_qq_samp = qqnorm(resid(out_info$pfasmdl.rm), plot.it = F)$y,
-                                                              stringsAsFactors = F)
-  
-  assumptions.df.t <- data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl), 
-                                                         plot.it = F)$x,
-                               trans_qq_samp = qqnorm(resid(out_info$transmdl), plot.it = F)$y,
-                                                              stringsAsFactors = F)
-  assumptions.df.t.rm <- data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl.rm), 
-                                                         plot.it = F)$x,
-                               trans_qq_samp = qqnorm(resid(out_info$transmdl.rm), plot.it = F)$y,
-                                                              stringsAsFactors = F)
+                                                              stringsAsFactors = F)} else {
+                                                                assumptions.df.rm = "No points removed"
+                                                              }
+    
+    
+    assumptions.df.t <- data.frame(trans_qq_theor = qqnorm(resid(out_info$transmdl), 
+                                                           plot.it = F)$x,
+                                   trans_qq_samp = qqnorm(resid(out_info$transmdl), plot.it = F)$y,
+                                   stringsAsFactors = F)
+    
+    if (!is.character(out_info$pfasmdl.rm){
+      assumptions.df.t.rm <- data.frame(trans_qq_theor.rm = qqnorm(resid(out_info$transmdl.rm), 
+                                                                   plot.it = F)$x,
+                                        trans_qq_samp = qqnorm(resid(out_info$transmdl.rm), plot.it = F)$y,
+                                        stringsAsFactors = F) 
+    } else {
+      assumptions.df.t.rm = "No points removed"   
+    }
 
 qq.plot.orig <- ggplot(assumptions.df, aes(x = orig_qq_theor, y = orig_qq_samp)) +
     geom_point() + 
@@ -3014,7 +3321,7 @@ qq.plot.orig <- ggplot(assumptions.df, aes(x = orig_qq_theor, y = orig_qq_samp))
     theme(plot.title = element_text(hjust = 0.5, size = 10),
           axis.title = element_text(size = 10))
 
-qq.plot.orig.rm <- ggplot(assumptions.df.rm, aes(x = orig_qq_theor, y = orig_qq_samp)) +
+qq.plot.orig.rm <- ggplot(assumptions.df.rm, aes(x = orig_qq_theor.rm, y = orig_qq_samp)) +
     geom_point() + 
     geom_abline(intercept = b.orig, slope = m.orig) +
     labs(x = "Theoretical Quantiles",
